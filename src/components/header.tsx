@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, ShoppingCart, MapPin, ChevronDown, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function Header() {
+  const navigate = useNavigate();
   const [deliveryMode, setDeliveryMode] = useState<"delivery" | "pickup">(
-    "delivery"
+    "delivery",
   );
   const [cartCount] = useState(0);
 
@@ -28,7 +30,7 @@ export function Header() {
                 "px-4 py-2 rounded-full text-sm font-medium transition-colors",
                 deliveryMode === "delivery"
                   ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               Delivery
@@ -39,7 +41,7 @@ export function Header() {
                 "px-4 py-2 rounded-full text-sm font-medium transition-colors",
                 deliveryMode === "pickup"
                   ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               Pickup
@@ -87,11 +89,16 @@ export function Header() {
             variant="ghost"
             size="sm"
             className="hidden sm:flex items-center gap-2 rounded-full"
+            onClick={() => navigate("/login")}
           >
             <span>Log in</span>
           </Button>
 
-          <Button size="sm" className="rounded-full">
+          <Button
+            size="sm"
+            className="rounded-full"
+            onClick={() => navigate("/login")}
+          >
             Sign up
           </Button>
         </div>
