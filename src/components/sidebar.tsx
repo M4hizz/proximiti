@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home,
   ShoppingCart,
@@ -19,7 +20,7 @@ import { cn } from "@/lib/utils";
 
 const mainNavItems = [
   { icon: Home, label: "Home", href: "/" },
-  { icon: ShoppingCart, label: "Grocery", href: "/grocery" },
+  { icon: ShoppingCart, label: "Map", href: "/discovery" },
   { icon: Store, label: "Convenience", href: "/convenience" },
   { icon: Wine, label: "Alcohol", href: "/alcohol" },
   { icon: Heart, label: "Health", href: "/health" },
@@ -38,7 +39,16 @@ const bottomNavItems = [
 ];
 
 export function Sidebar() {
-  const [activeItem, setActiveItem] = useState("Home");
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleNavigation = (href: string, label: string) => {
+    navigate(href);
+  };
+
+  const isActive = (href: string) => {
+    return location.pathname === href;
+  };
 
   return (
     <aside className="hidden lg:flex flex-col w-56 bg-background border-r border-border h-[calc(100vh-65px)] sticky top-[65px] shrink-0">
@@ -48,12 +58,12 @@ export function Sidebar() {
           {mainNavItems.map((item) => (
             <button
               key={item.label}
-              onClick={() => setActiveItem(item.label)}
+              onClick={() => handleNavigation(item.href, item.label)}
               className={cn(
                 "flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted",
-                activeItem === item.label
+                isActive(item.href)
                   ? "bg-muted text-foreground"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground",
               )}
             >
               <item.icon className="h-5 w-5" />
@@ -70,12 +80,12 @@ export function Sidebar() {
           {bottomNavItems.map((item) => (
             <button
               key={item.label}
-              onClick={() => setActiveItem(item.label)}
+              onClick={() => handleNavigation(item.href, item.label)}
               className={cn(
                 "flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted",
-                activeItem === item.label
+                isActive(item.href)
                   ? "bg-muted text-foreground"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground",
               )}
             >
               <item.icon className="h-5 w-5" />
