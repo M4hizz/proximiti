@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, ShoppingCart, MapPin, ChevronDown, Menu } from "lucide-react";
+import { useAuth } from "@/App";
+import { Search, ShoppingCart, MapPin, ChevronDown, Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +11,7 @@ export function Header() {
     "delivery",
   );
   const [cartCount] = useState(0);
+  const auth = useAuth();
 
   return (
     <header className="sticky top-0 z-50 bg-background border-b border-border">
@@ -85,22 +87,41 @@ export function Header() {
             </span>
           </Button>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden sm:flex items-center gap-2 rounded-full"
-            onClick={() => navigate("/login")}
-          >
-            <span>Log in</span>
-          </Button>
+          {auth.user ? (
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <User className="h-5 w-5" />
+              </Button>
+              <span>{auth.user.username}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden sm:flex items-center gap-2 rounded-full"
+                onClick={() => auth.logout()}
+              >
+                <span>Log out</span>
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden sm:flex items-center gap-2 rounded-full"
+                onClick={() => navigate("/login")}
+              >
+                <span>Log in</span>
+              </Button>
 
-          <Button
-            size="sm"
-            className="rounded-full"
-            onClick={() => navigate("/login")}
-          >
-            Sign up
-          </Button>
+              <Button
+                size="sm"
+                className="rounded-full"
+                onClick={() => navigate("/login")}
+              >
+                Sign up
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>
