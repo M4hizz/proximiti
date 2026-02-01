@@ -1,82 +1,48 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Header } from "@/components/header";
-import { Sidebar } from "@/components/sidebar";
-import { CategoryBar } from "@/components/category-bar";
-import { FilterRow } from "@/components/filter-row";
-import { RestaurantSection } from "@/components/restaurant-section";
-import { StoreGrid } from "@/components/store-grid";
-import { PromoBanner } from "@/components/promo-banner";
+import { createContext, useContext, useState } from "react";
 import { LoginPage } from "@/pages/LoginPage";
-import { DiscoveryPage } from "@/pages/DiscoveryPage";
-import { speedyRestaurants, bogoRestaurants, stores } from "@/lib/data";
+import { BusinessFinder } from "@/pages/BusinessFinder";
 
-function HomePage() {
-  return (
-    <>
-      <Sidebar />
-      <div className="flex-1 min-w-0">
-        <CategoryBar />
-        <FilterRow />
-        <main>
-          <PromoBanner />
-          <RestaurantSection
-            title="Speedy Deliveries"
-            restaurants={speedyRestaurants}
-          />
-          <RestaurantSection
-            title="Buy 1, Get 1 Free"
-            restaurants={bogoRestaurants}
-          />
-          <StoreGrid title="Stores Near You" stores={stores} />
-          <RestaurantSection
-            title="Popular Near You"
-            restaurants={[...speedyRestaurants].reverse()}
-          />
-        </main>
-      </div>
-    </>
-  );
+interface User {
+  username: string;
 }
 
+interface AuthContextType {
+  user: User | null;
+  login: (userData: User) => void;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
 function App() {
+  const [user, setUser] = useState<User | null>(null);
+
+  const login = (userData: User) => {
+    setUser(userData);
+  };
+
+  const logout = () => {
+    setUser(null);
+  };
+
   return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-background">
-        <Header />
+    <AuthContext.Provider value={{ user, login, logout }}>
+      <BrowserRouter>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <div className="flex">
-                <HomePage />
-              </div>
-            }
-          />
-          <Route
-            path="/login"
-            element={
-              <div className="flex">
-                <Sidebar />
-                <div className="flex-1 min-w-0">
-                  <LoginPage />
-                </div>
-              </div>
-            }
-          />
-          <Route
-            path="/discovery"
-            element={
-              <div className="flex">
-                <Sidebar />
-                <div className="flex-1 min-w-0">
-                  <DiscoveryPage />
-                </div>
-              </div>
-            }
-          />
+          <Route path="/" element={<BusinessFinder />} />
+          <Route path="/login" element={<LoginPage />} />
         </Routes>
-      </div>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthContext.Provider>
   );
 }
 
