@@ -71,7 +71,7 @@ export function BusinessFinder() {
           <div className="flex items-center justify-between mb-4">
             {/* Logo and title */}
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-500 rounded-lg">
+              <div className="p-2 bg-cherry-rose rounded-lg">
                 <Compass className="w-6 h-6 text-white" />
               </div>
               <h1 className="text-2xl font-bold text-white">Proximiti</h1>
@@ -99,7 +99,7 @@ export function BusinessFinder() {
               ) : (
                 <Button
                   onClick={() => navigate("/login")}
-                  className="bg-green-500 hover:bg-green-600 text-white"
+                  className="bg-cherry-rose hover:bg-green-600 text-white"
                 >
                   <LogIn className="w-4 h-4 mr-2" />
                   Sign In

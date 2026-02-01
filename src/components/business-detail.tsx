@@ -29,7 +29,7 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
           <X className="w-5 h-5 text-white" />
         </button>
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-gray-900 to-transparent p-4">
-          <span className="px-2 py-1 bg-green-500 text-white text-xs font-medium rounded-full capitalize">
+          <span className="px-2 py-1 bg-cherry-rose text-white text-xs font-medium rounded-full capitalize">
             {business.category}
           </span>
         </div>
@@ -77,7 +77,7 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
 
         {/* Action buttons */}
         <div className="mt-6 flex gap-3">
-          <Button className="flex-1 bg-green-500 hover:bg-green-600 text-white">
+          <Button className="flex-1 bg-cherry-rose hover:bg-green-600 text-white">
             <Navigation className="w-4 h-4 mr-2" />
             Get Directions
           </Button>

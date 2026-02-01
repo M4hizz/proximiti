@@ -50,8 +50,8 @@ export function MapView({
   onSelectBusiness,
   userLocation,
 }: MapViewProps) {
-  // Default center (New York City)
-  const defaultCenter: [number, number] = [40.7128, -74.006];
+  // Default center (Toronto, Ontario)
+  const defaultCenter: [number, number] = [43.7182, -79.3762];
   const center = userLocation || defaultCenter;
 
   return (
@@ -89,7 +89,7 @@ export function MapView({
       {/* Map legend */}
       <div className="absolute bottom-4 left-4 bg-gray-800/90 backdrop-blur-sm px-3 py-2 rounded-lg text-xs text-white">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+          <div className="w-3 h-3 bg-cherry-rose rounded-full"></div>
           <span>{businesses.length} businesses nearby</span>
         </div>
       </div>

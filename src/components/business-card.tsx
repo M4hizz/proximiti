@@ -17,7 +17,7 @@ export function BusinessCard({ business, isSelected, onClick }: BusinessCardProp
       onClick={onClick}
       className={`w-full text-left p-4 rounded-xl transition-all duration-200 ${
         isSelected
-          ? "bg-green-500/20 border-2 border-green-500"
+          ? "bg-cherry-rose/20 border-2 border-cherry-rose"
           : "bg-gray-800 border-2 border-transparent hover:border-gray-600 hover:bg-gray-750"
       }`}
     >

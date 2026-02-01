@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -15,19 +16,23 @@
   --secondary-foreground: #000000;
   --muted: #f6f6f6;
   --muted-foreground: #6b7280;
-  --accent: #06c167;
+  --accent: #A4303F;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --border: #e5e7eb;
   --input: #e5e7eb;
-  --ring: #06c167;
-  --chart-1: #06c167;
-  --chart-2: #10b981;
-  --chart-3: #34d399;
-  --chart-4: #6ee7b7;
-  --chart-5: #a7f3d0;
+  --ring: #A4303F;
+  --chart-1: #870058;
+  --chart-2: #A4303F;
+  --chart-3: #F2D0A4;
+  --chart-4: #FFECCC;
+  --chart-5: #06c167;
   --radius: 0.5rem;
+  --dark-raspberry: #870058;
+  --cherry-rose: #A4303F;
+  --apricot-cream: #F2D0A4;
+  --papaya-whip: #FFECCC;
   --sidebar: #000000;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #06c167;
@@ -51,18 +56,22 @@
   --secondary-foreground: #ffffff;
   --muted: #1f1f1f;
   --muted-foreground: #9ca3af;
-  --accent: #06c167;
-  --accent-foreground: #ffffff;
+  --accent: #F2D0A4;
+  --accent-foreground: #000000;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --border: #1f1f1f;
   --input: #1f1f1f;
-  --ring: #06c167;
-  --chart-1: #06c167;
-  --chart-2: #10b981;
-  --chart-3: #34d399;
-  --chart-4: #6ee7b7;
-  --chart-5: #a7f3d0;
+  --ring: #A4303F;
+  --chart-1: #870058;
+  --chart-2: #A4303F;
+  --chart-3: #F2D0A4;
+  --chart-4: #FFECCC;
+  --chart-5: #06c167;
+  --dark-raspberry: #870058;
+  --cherry-rose: #A4303F;
+  --apricot-cream: #F2D0A4;
+  --papaya-whip: #FFECCC;
   --sidebar: #000000;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #06c167;
@@ -74,8 +83,8 @@
 }
 
 @theme inline {
-  --font-sans: "Geist", "Geist Fallback", system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", monospace;
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "Space Grotesk", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -104,6 +113,10 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --color-dark-raspberry: var(--dark-raspberry);
+  --color-cherry-rose: var(--cherry-rose);
+  --color-apricot-cream: var(--apricot-cream);
+  --color-papaya-whip: var(--papaya-whip);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -121,6 +134,8 @@
   body {
     @apply bg-background text-foreground;
     margin: 0;
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600;
   }
 }
 
