@@ -68,7 +68,7 @@ export function LoginForm() {
             className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
           />
         </div>
-        <Button type="submit" className="w-full bg-green-500 hover:bg-green-600 text-white">
+        <Button type="submit" className="w-full bg-cherry-rose hover:bg-green-600 text-white">
           {isLogin ? 'Sign In' : 'Create Account'}
         </Button>
       </form>

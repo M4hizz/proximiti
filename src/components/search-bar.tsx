@@ -28,7 +28,7 @@ export function SearchBar({ value, onChange, onLocateUser }: SearchBarProps) {
       {/* Location button */}
       <button
         onClick={onLocateUser}
-        className="px-4 bg-green-500 hover:bg-green-600 rounded-xl transition-colors flex items-center gap-2 text-white font-medium"
+        className="px-4 bg-cherry-rose hover:bg-green-600 rounded-xl transition-colors flex items-center gap-2 text-white font-medium"
         aria-label="Use my location"
       >
         <MapPin className="w-5 h-5" />

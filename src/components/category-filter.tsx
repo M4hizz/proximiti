@@ -18,7 +18,7 @@ export function CategoryFilter({ selected, onSelect }: CategoryFilterProps) {
           onClick={() => onSelect(category.id)}
           className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all ${
             selected === category.id
-              ? "bg-green-500 text-white"
+              ? "bg-cherry-rose text-white"
               : "bg-gray-800 text-gray-300 hover:bg-gray-700"
           }`}
         >
