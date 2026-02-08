@@ -6,10 +6,11 @@ import { BusinessCard } from "@/components/business-card";
 import { BusinessDetail } from "@/components/business-detail";
 import { SearchBar } from "@/components/search-bar";
 import { CategoryFilter } from "@/components/category-filter";
+import { AdminPanel } from "@/components/admin-panel";
 import { businesses, calculateDistance } from "@/lib/businesses";
 import { fetchNearbyBusinesses } from "@/lib/api";
 import type { Business } from "@/lib/businesses";
-import { Compass, User, LogOut, LogIn } from "lucide-react";
+import { Compass, User, LogOut, LogIn, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -31,6 +32,7 @@ export function BusinessFinder() {
   );
   const [nearbyBusinesses, setNearbyBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState(false);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
 
   // Get businesses based on user location (real API data) or default mock businesses
   const availableBusinesses = useMemo(() => {
@@ -142,9 +144,28 @@ export function BusinessFinder() {
                   <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 rounded-full">
                     <User className="w-4 h-4 text-green-400" />
                     <span className="text-white text-sm font-medium">
-                      {auth.user.username}
+                      {auth.user.name}
                     </span>
+                    {auth.user.role === 'admin' && (
+                      <span className="ml-2 px-2 py-1 bg-purple-600 text-white text-xs rounded-full">
+                        Admin
+                      </span>
+                    )}
                   </div>
+                  
+                  {/* Admin Panel Button */}
+                  {auth.user.role === 'admin' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsAdminPanelOpen(true)}
+                      className="text-purple-400 hover:text-purple-300 hover:bg-gray-800"
+                    >
+                      <Shield className="w-4 h-4 mr-2" />
+                      <span className="hidden sm:inline">Admin</span>
+                    </Button>
+                  )}
+                  
                   <Button
                     variant="ghost"
                     size="sm"
@@ -256,6 +277,12 @@ export function BusinessFinder() {
           </div>
         </div>
       </main>
+      
+      {/* Admin Panel Modal */}
+      <AdminPanel 
+        isOpen={isAdminPanelOpen} 
+        onClose={() => setIsAdminPanelOpen(false)} 
+      />
     </div>
   );
 }
