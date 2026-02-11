@@ -1,29 +1,24 @@
-import express from 'express';
-import cors from 'cors';
+import express, { type Request, type Response, type NextFunction } from 'express';
+import cors, { type CorsOptions } from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 // Import our authentication system
 import { 
   authenticate, 
   optionalAuthenticate, 
-  requireRole, 
   requireAdmin,
   extractToken,
   securityHeaders,
-  createRateLimiter 
-} from './src/lib/auth.js';
-import authRoutes from './src/lib/routes/auth.js';
-import db from './src/lib/database.js';
+  createRateLimiter,
+  type AuthenticatedRequest
+} from './src/lib/auth';
+import authRoutes from './src/lib/routes/auth';
+import db from './src/lib/database';
 
 // Load environment variables
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -50,13 +45,13 @@ app.use(helmet({
 app.use(securityHeaders);
 
 // CORS configuration
-const corsOptions = {
-  origin: function (origin, callback) {
+const corsOptions: CorsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     const allowedOrigins = [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
       process.env.FRONTEND_URL
-    ].filter(Boolean);
+    ].filter(Boolean) as string[];
     
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -105,10 +100,8 @@ app.get('/health', (req, res) => {
 app.use('/api', authRoutes);
 
 // Protected business data routes
-app.get('/api/businesses', optionalAuthenticate, (req, res) => {
+app.get('/api/businesses', optionalAuthenticate, (req: AuthenticatedRequest, res: Response) => {
   try {
-    // In a real app, this would query businesses from the database
-    // For now, return mock data (you can replace this with actual business logic)
     const businesses = [
       {
         id: "1",
@@ -146,20 +139,20 @@ app.get('/api/businesses', optionalAuthenticate, (req, res) => {
 });
 
 // Protected route - user profile management
-app.get('/api/profile', authenticate, (req, res) => {
+app.get('/api/profile', authenticate, (req: AuthenticatedRequest, res: Response) => {
   res.json({
     user: {
-      id: req.user.id,
-      email: req.user.email,
-      name: req.user.name,
-      role: req.user.role,
-      isVerified: req.user.isVerified,
-      createdAt: req.user.createdAt
+      id: req.user!.id,
+      email: req.user!.email,
+      name: req.user!.name,
+      role: req.user!.role,
+      isVerified: req.user!.isVerified,
+      createdAt: req.user!.createdAt
     }
   });
 });
 
-app.put('/api/profile', authenticate, async (req, res) => {
+app.put('/api/profile', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { name } = req.body;
     
@@ -170,7 +163,7 @@ app.put('/api/profile', authenticate, async (req, res) => {
       });
     }
 
-    const updatedUser = db.updateUser(req.user.id, { name: name.trim() });
+    const updatedUser = db.updateUser(req.user!.id, { name: name.trim() });
     
     res.json({
       message: 'Profile updated successfully',
@@ -192,11 +185,11 @@ app.put('/api/profile', authenticate, async (req, res) => {
 });
 
 // Admin-only routes
-app.get('/api/admin/users', authenticate, requireAdmin, (req, res) => {
+app.get('/api/admin/users', authenticate, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   try {
     // Get pagination parameters
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
     
     const users = db.getAllUsers(limit, offset);
@@ -225,9 +218,9 @@ app.get('/api/admin/users', authenticate, requireAdmin, (req, res) => {
   }
 });
 
-app.put('/api/admin/users/:id/role', authenticate, requireAdmin, (req, res) => {
+app.put('/api/admin/users/:id/role', authenticate, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { role } = req.body;
 
     if (!['user', 'admin'].includes(role)) {
@@ -258,7 +251,7 @@ app.put('/api/admin/users/:id/role', authenticate, requireAdmin, (req, res) => {
 });
 
 // Error handling middleware
-app.use((error, req, res, next) => {
+app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled error:', error);
   
   if (error.type === 'entity.parse.failed') {
@@ -275,7 +268,7 @@ app.use((error, req, res, next) => {
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({
     error: 'Not found',
     message: 'The requested endpoint does not exist'
