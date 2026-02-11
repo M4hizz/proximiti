@@ -104,7 +104,7 @@ class DatabaseManager {
   }): Promise<User> {
     const { email, name, role = 'user', password, googleId, isVerified = false } = userData;
     
-    let hashedPassword = undefined;
+    let hashedPassword: string | null = null;
     if (password && !googleId) {
       const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
       hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -116,7 +116,7 @@ class DatabaseManager {
     `);
 
     try {
-      const result = stmt.run(email, name, googleId, role, hashedPassword, isVerified);
+      const result = stmt.run(email, name, googleId ?? null, role, hashedPassword, isVerified ? 1 : 0);
       return this.getUserById(result.lastInsertRowid as number);
     } catch (error: any) {
       if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
