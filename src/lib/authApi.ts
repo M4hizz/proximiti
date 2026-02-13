@@ -6,7 +6,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'user' | 'admin';
+  role: "user" | "admin";
   isVerified: boolean;
   createdAt?: string;
 }
@@ -32,19 +32,20 @@ export interface RegisterData {
 }
 
 class AuthApiService {
-  private readonly baseUrl = 'http://localhost:3001/api';
+  private readonly baseUrl =
+    import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
   private async request<T>(
-    endpoint: string, 
-    options: RequestInit = {}
+    endpoint: string,
+    options: RequestInit = {},
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    
+
     const config: RequestInit = {
       ...options,
-      credentials: 'include', // Include cookies in requests
+      credentials: "include", // Include cookies in requests
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...options.headers,
       },
     };
@@ -54,7 +55,7 @@ class AuthApiService {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Request failed');
+        throw new Error(data.message || "Request failed");
       }
 
       return data;
@@ -62,73 +63,82 @@ class AuthApiService {
       if (error instanceof Error) {
         throw error;
       }
-      throw new Error('Network error occurred');
+      throw new Error("Network error occurred");
     }
   }
 
   // Google OAuth login
   async loginWithGoogle(credential: string): Promise<AuthResponse> {
-    return this.request<AuthResponse>('/auth/google', {
-      method: 'POST',
-      body: JSON.stringify({ 
+    return this.request<AuthResponse>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({
         credential,
-        clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID 
+        clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
       }),
     });
   }
 
   // Traditional email/password login
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    return this.request<AuthResponse>('/auth/login', {
-      method: 'POST',
+    return this.request<AuthResponse>("/auth/login", {
+      method: "POST",
       body: JSON.stringify(credentials),
     });
   }
 
   // Register new user
-  async register(userData: RegisterData): Promise<{ message: string; user: User }> {
-    return this.request('/auth/register', {
-      method: 'POST',
+  async register(
+    userData: RegisterData,
+  ): Promise<{ message: string; user: User }> {
+    return this.request("/auth/register", {
+      method: "POST",
       body: JSON.stringify(userData),
     });
   }
 
   // Logout
   async logout(): Promise<{ message: string }> {
-    return this.request('/auth/logout', {
-      method: 'POST',
+    return this.request("/auth/logout", {
+      method: "POST",
     });
   }
 
   // Logout from all devices
   async logoutAll(): Promise<{ message: string }> {
-    return this.request('/auth/logout-all', {
-      method: 'POST',
+    return this.request("/auth/logout-all", {
+      method: "POST",
     });
   }
 
   // Get current user profile
   async getCurrentUser(): Promise<{ user: User }> {
-    return this.request('/auth/me');
+    return this.request("/auth/me");
   }
 
   // Refresh access token
-  async refreshToken(): Promise<{ tokens: { accessToken: string; refreshToken: string } }> {
-    return this.request('/auth/refresh', {
-      method: 'POST',
+  async refreshToken(): Promise<{
+    tokens: { accessToken: string; refreshToken: string };
+  }> {
+    return this.request("/auth/refresh", {
+      method: "POST",
     });
   }
 
   // Update user profile
-  async updateProfile(updates: { name: string }): Promise<{ message: string; user: User }> {
-    return this.request('/profile', {
-      method: 'PUT',
+  async updateProfile(updates: {
+    name: string;
+  }): Promise<{ message: string; user: User }> {
+    return this.request("/profile", {
+      method: "PUT",
       body: JSON.stringify(updates),
     });
   }
 
   // Admin: Get all users
-  async getUsers(page: number = 1, limit: number = 20): Promise<{
+  async getUsers(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
     users: User[];
     pagination: { page: number; limit: number; offset: number };
   }> {
@@ -136,12 +146,15 @@ class AuthApiService {
   }
 
   // Admin: Update user role
-  async updateUserRole(userId: string, role: 'user' | 'admin'): Promise<{
+  async updateUserRole(
+    userId: string,
+    role: "user" | "admin",
+  ): Promise<{
     message: string;
     user: User;
   }> {
     return this.request(`/admin/users/${userId}/role`, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify({ role }),
     });
   }
@@ -151,7 +164,7 @@ class AuthApiService {
     businesses: any[];
     user?: User;
   }> {
-    return this.request('/businesses');
+    return this.request("/businesses");
   }
 }
 
