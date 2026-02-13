@@ -18,7 +18,7 @@ export function BusinessCard({ business, isSelected, onClick }: BusinessCardProp
       className={`w-full text-left p-4 rounded-xl transition-all duration-200 ${
         isSelected
           ? "bg-cherry-rose/20 border-2 border-cherry-rose"
-          : "bg-gray-800 border-2 border-transparent hover:border-gray-600 hover:bg-gray-750"
+          : "bg-white dark:bg-gray-800 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-750 shadow-sm dark:shadow-none"
       }`}
     >
       <div className="flex gap-4">
@@ -32,32 +32,32 @@ export function BusinessCard({ business, isSelected, onClick }: BusinessCardProp
         {/* Business info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-white truncate">{business.name}</h3>
-            <span className="text-green-400 font-medium text-sm flex-shrink-0">
+            <h3 className="font-semibold text-gray-900 dark:text-white truncate">{business.name}</h3>
+            <span className="text-green-600 dark:text-green-400 font-medium text-sm flex-shrink-0">
               {business.priceLevel}
             </span>
           </div>
 
           {/* Rating */}
           <div className="flex items-center gap-1 mt-1">
-            <Star className="w-4 h-4 fill-green-400 text-green-400" />
-            <span className="text-white font-medium text-sm">{business.rating}</span>
-            <span className="text-gray-400 text-sm">({business.reviewCount})</span>
+            <Star className="w-4 h-4 fill-green-500 dark:fill-green-400 text-green-500 dark:text-green-400" />
+            <span className="text-gray-900 dark:text-white font-medium text-sm">{business.rating}</span>
+            <span className="text-gray-500 dark:text-gray-400 text-sm">({business.reviewCount})</span>
           </div>
 
           {/* Category badge */}
-          <span className="inline-block mt-2 px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded-full capitalize">
+          <span className="inline-block mt-2 px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full capitalize">
             {business.category}
           </span>
 
           {/* Address */}
-          <div className="flex items-center gap-1 mt-2 text-gray-400 text-sm">
+          <div className="flex items-center gap-1 mt-2 text-gray-500 dark:text-gray-400 text-sm">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{business.address.split(",")[0]}</span>
           </div>
 
           {/* Hours */}
-          <div className="flex items-center gap-1 mt-1 text-gray-400 text-sm">
+          <div className="flex items-center gap-1 mt-1 text-gray-500 dark:text-gray-400 text-sm">
             <Clock className="w-3 h-3 flex-shrink-0" />
             <span>{business.hours}</span>
           </div>
