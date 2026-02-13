@@ -257,7 +257,7 @@ export function SearchBar({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Search businesses, categories..."
-          className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+          className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl pl-12 pr-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
         />
       </div>
 
@@ -275,18 +275,18 @@ export function SearchBar({
             setShowDropdown(true)
           }
           placeholder="Enter location..."
-          className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+          className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl pl-12 pr-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
         />
 
         {/* Dropdown with suggestions */}
         {(showDropdown || isLoadingSuggestions) &&
           locationQuery.length >= 3 && (
             <div
-              className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border-2 border-green-500 rounded-xl shadow-2xl max-h-96 overflow-y-auto z-[9999]"
+              className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border-2 border-green-500 rounded-xl shadow-2xl max-h-96 overflow-y-auto z-[9999]"
               style={{ minWidth: "300px" }}
             >
               {isLoadingSuggestions ? (
-                <div className="px-4 py-4 text-green-400 text-sm font-medium animate-pulse">
+                <div className="px-4 py-4 text-green-600 dark:text-green-400 text-sm font-medium animate-pulse">
                   🔍 Searching for "{locationQuery}"...
                 </div>
               ) : suggestions.length > 0 ? (
@@ -301,10 +301,10 @@ export function SearchBar({
                     <button
                       key={suggestion.place_id}
                       onClick={() => handleLocationSelect(suggestion)}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors border-b border-gray-700 last:border-b-0 flex items-center gap-3 first:rounded-t-xl last:rounded-b-xl group"
+                      className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border-b border-gray-200 dark:border-gray-700 last:border-b-0 flex items-center gap-3 first:rounded-t-xl last:rounded-b-xl group"
                     >
                       {/* Icon like Google Maps */}
-                      <div className="shrink-0 text-gray-400 group-hover:text-green-400 transition-colors">
+                      <div className="shrink-0 text-gray-400 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
                         {hasStreetAddress ? (
                           <Home className="w-4 h-4" />
                         ) : (
@@ -314,11 +314,11 @@ export function SearchBar({
 
                       {/* Text content */}
                       <div className="flex-1 min-w-0 overflow-hidden">
-                        <div className="text-white font-medium truncate text-sm">
+                        <div className="text-gray-900 dark:text-white font-medium truncate text-sm">
                           {specificLocation}
                         </div>
                         {generalLocation && (
-                          <div className="text-gray-400 text-xs truncate mt-0.5">
+                          <div className="text-gray-500 dark:text-gray-400 text-xs truncate mt-0.5">
                             {generalLocation}
                           </div>
                         )}
@@ -328,11 +328,11 @@ export function SearchBar({
                 })
               ) : (
                 <div className="px-4 py-4">
-                  <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm mb-2">
                     <MapPin className="w-4 h-4" />
                     <span className="font-medium">No locations found</span>
                   </div>
-                  <div className="text-gray-500 text-xs ml-6">
+                  <div className="text-gray-400 dark:text-gray-500 text-xs ml-6">
                     Try searching for:
                     <br />
                     • Street address: "123 Main St, City"

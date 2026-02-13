@@ -159,12 +159,12 @@ export function LoginForm() {
   };
 
   return (
-    <div className="w-full max-w-sm bg-gray-800 border border-gray-700 rounded-xl p-6">
+    <div className="w-full max-w-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg dark:shadow-none">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
           {isLogin ? 'Welcome back' : 'Create account'}
         </h2>
-        <p className="text-gray-400 mt-1">
+        <p className="text-gray-500 dark:text-gray-400 mt-1">
           {isLogin 
             ? 'Sign in to access your personalized business finder'
             : 'Join Proximiti to discover local businesses'
@@ -181,8 +181,8 @@ export function LoginForm() {
       {/* Google Sign-in Button */}
       <div className="mb-4">
         {!googleInitialized ? (
-          <div className="w-full h-10 bg-gray-700 rounded animate-pulse flex items-center justify-center">
-            <span className="text-gray-400 text-sm">Loading Google Sign-In...</span>
+          <div className="w-full h-10 bg-gray-200 dark:bg-gray-700 rounded animate-pulse flex items-center justify-center">
+            <span className="text-gray-500 dark:text-gray-400 text-sm">Loading Google Sign-In...</span>
           </div>
         ) : (
           <>
@@ -206,10 +206,10 @@ export function LoginForm() {
       {googleInitialized && import.meta.env.VITE_GOOGLE_CLIENT_ID && import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'your-google-client-id' && (
         <div className="relative mb-4">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-600"></div>
+            <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-gray-800 text-gray-400">Or continue with email</span>
+            <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or continue with email</span>
           </div>
         </div>
       )}
@@ -217,7 +217,7 @@ export function LoginForm() {
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-gray-300">Full Name</Label>
+            <Label htmlFor="name" className="text-gray-700 dark:text-gray-300">Full Name</Label>
             <Input
               id="name"
               type="text"
@@ -225,13 +225,13 @@ export function LoginForm() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required={!isLogin}
-              className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
+              className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
             />
           </div>
         )}
         
         <div className="space-y-2">
-          <Label htmlFor="email" className="text-gray-300">Email</Label>
+          <Label htmlFor="email" className="text-gray-700 dark:text-gray-300">Email</Label>
           <Input
             id="email"
             type="email"
@@ -239,12 +239,12 @@ export function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
+            className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
           />
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="password" className="text-gray-300">Password</Label>
+          <Label htmlFor="password" className="text-gray-700 dark:text-gray-300">Password</Label>
           <Input
             id="password"
             type="password"
@@ -252,7 +252,7 @@ export function LoginForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
+            className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
           />
         </div>
         
@@ -272,11 +272,11 @@ export function LoginForm() {
         </Button>
       </form>
       
-      <div className="mt-6 text-center text-sm text-gray-400">
+      <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
         {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
         <button
           type="button"
-          className="text-green-400 hover:text-green-300 font-medium"
+          className="text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 font-medium"
           onClick={toggleMode}
           disabled={isLoading}
         >
@@ -285,7 +285,7 @@ export function LoginForm() {
       </div>
 
       {/* Security Notice */}
-      <div className="mt-4 text-xs text-gray-500 text-center">
+      <div className="mt-4 text-xs text-gray-400 dark:text-gray-500 text-center">
         <p>🔒 Your data is protected with enterprise-grade security</p>
         {!import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID === 'your-google-client-id' ? (
           <p className="mt-1 text-blue-400">
