@@ -139,34 +139,40 @@ export function MapView({
           </Marker>
         )}
 
-        {/* Business markers */}
-        {businesses.map((business) => (
+        {/* Selected business marker - only show the selected business */}
+        {selectedBusiness && (
           <Marker
-            key={business.id}
-            position={[business.lat, business.lng]}
-            icon={
-              selectedBusiness?.id === business.id ? selectedIcon : greenIcon
-            }
+            key={selectedBusiness.id}
+            position={[selectedBusiness.lat, selectedBusiness.lng]}
+            icon={selectedIcon}
             eventHandlers={{
-              click: () => onSelectBusiness(business),
+              click: () => onSelectBusiness(selectedBusiness),
             }}
           >
             <Tooltip direction="top" offset={[0, -20]} opacity={0.9}>
-              {business.name}
+              {selectedBusiness.name}
             </Tooltip>
             <Popup>
-              <div className="text-gray-900 font-medium">{business.name}</div>
-              <div className="text-gray-600 text-sm">{business.category}</div>
+              <div className="text-gray-900 font-medium">
+                {selectedBusiness.name}
+              </div>
+              <div className="text-gray-600 text-sm">
+                {selectedBusiness.category}
+              </div>
             </Popup>
           </Marker>
-        ))}
+        )}
       </MapContainer>
 
       {/* Map legend */}
       <div className="absolute bottom-4 left-4 bg-gray-800/90 backdrop-blur-sm px-3 py-2 rounded-lg text-xs text-white">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-cherry-rose rounded-full"></div>
-          <span>{businesses.length} businesses nearby</span>
+          <span>
+            {selectedBusiness
+              ? `Viewing: ${selectedBusiness.name}`
+              : `${businesses.length} businesses nearby`}
+          </span>
         </div>
       </div>
     </div>

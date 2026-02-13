@@ -264,15 +264,7 @@ export function BusinessFinder() {
               )}
             </div>
 
-            {/* Business detail (shown when selected) */}
-            {selectedBusiness && (
-              <BusinessDetail
-                business={selectedBusiness}
-                onClose={() => setSelectedBusiness(null)}
-              />
-            )}
-
-            {/* Business list */}
+            {/* Business list with inline detail expansion */}
             <div className="space-y-3">
               {isLoadingBusinesses ? (
                 <div className="text-center py-12 text-gray-400">
@@ -281,12 +273,23 @@ export function BusinessFinder() {
                 </div>
               ) : filteredBusinesses.length > 0 ? (
                 filteredBusinesses.map((business) => (
-                  <BusinessCard
-                    key={business.id}
-                    business={business}
-                    isSelected={selectedBusiness?.id === business.id}
-                    onClick={() => handleSelectBusiness(business)}
-                  />
+                  <div key={business.id}>
+                    <BusinessCard
+                      business={business}
+                      isSelected={selectedBusiness?.id === business.id}
+                      onClick={() => handleSelectBusiness(business)}
+                    />
+                    {/* Show detail below the selected card */}
+                    {selectedBusiness?.id === business.id && (
+                      <div className="mt-3 animate-slideDown">
+                        <BusinessDetail
+                          key={selectedBusiness.id}
+                          business={selectedBusiness}
+                          onClose={() => setSelectedBusiness(null)}
+                        />
+                      </div>
+                    )}
+                  </div>
                 ))
               ) : (
                 <div className="text-center py-12 text-gray-400">
