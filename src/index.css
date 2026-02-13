@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -16,23 +16,23 @@
   --secondary-foreground: #000000;
   --muted: #f6f6f6;
   --muted-foreground: #6b7280;
-  --accent: #A4303F;
+  --accent: #a4303f;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --border: #e5e7eb;
   --input: #e5e7eb;
-  --ring: #A4303F;
+  --ring: #a4303f;
   --chart-1: #870058;
-  --chart-2: #A4303F;
-  --chart-3: #F2D0A4;
-  --chart-4: #FFECCC;
+  --chart-2: #a4303f;
+  --chart-3: #f2d0a4;
+  --chart-4: #ffeccc;
   --chart-5: #06c167;
   --radius: 0.5rem;
   --dark-raspberry: #870058;
-  --cherry-rose: #A4303F;
-  --apricot-cream: #F2D0A4;
-  --papaya-whip: #FFECCC;
+  --cherry-rose: #a4303f;
+  --apricot-cream: #f2d0a4;
+  --papaya-whip: #ffeccc;
   --sidebar: #000000;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #06c167;
@@ -56,22 +56,22 @@
   --secondary-foreground: #ffffff;
   --muted: #1f1f1f;
   --muted-foreground: #9ca3af;
-  --accent: #F2D0A4;
+  --accent: #f2d0a4;
   --accent-foreground: #000000;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --border: #1f1f1f;
   --input: #1f1f1f;
-  --ring: #A4303F;
+  --ring: #a4303f;
   --chart-1: #870058;
-  --chart-2: #A4303F;
-  --chart-3: #F2D0A4;
-  --chart-4: #FFECCC;
+  --chart-2: #a4303f;
+  --chart-3: #f2d0a4;
+  --chart-4: #ffeccc;
   --chart-5: #06c167;
   --dark-raspberry: #870058;
-  --cherry-rose: #A4303F;
-  --apricot-cream: #F2D0A4;
-  --papaya-whip: #FFECCC;
+  --cherry-rose: #a4303f;
+  --apricot-cream: #f2d0a4;
+  --papaya-whip: #ffeccc;
   --sidebar: #000000;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #06c167;
@@ -146,4 +146,23 @@
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Slide down animation for business detail expansion */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out forwards;
+  overflow: hidden;
 }

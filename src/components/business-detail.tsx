@@ -51,7 +51,9 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
             <Star className="w-5 h-5 fill-green-400 text-green-400" />
             <span className="text-white font-semibold">{business.rating}</span>
           </div>
-          <span className="text-gray-400">({business.reviewCount} reviews)</span>
+          <span className="text-gray-400">
+            ({business.reviewCount} reviews)
+          </span>
         </div>
 
         {/* Description */}
@@ -63,15 +65,32 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
         <div className="mt-5 space-y-3">
           <div className="flex items-start gap-3">
             <MapPin className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-            <span className="text-gray-300 text-sm">{business.address}</span>
+            <div className="flex-1">
+              <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
+                Address
+              </div>
+              <span className="text-gray-300 text-sm">{business.address}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Clock className="w-5 h-5 text-green-400 flex-shrink-0" />
-            <span className="text-gray-300 text-sm">{business.hours}</span>
+          <div className="flex items-start gap-3">
+            <Clock className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
+                Hours
+              </div>
+              <span className="text-gray-300 text-sm whitespace-pre-line">
+                {business.hours}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Phone className="w-5 h-5 text-green-400 flex-shrink-0" />
-            <span className="text-gray-300 text-sm">{business.phone}</span>
+          <div className="flex items-start gap-3">
+            <Phone className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
+                Phone
+              </div>
+              <span className="text-gray-300 text-sm">{business.phone}</span>
+            </div>
           </div>
         </div>
 
@@ -81,7 +100,10 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
             <Navigation className="w-4 h-4 mr-2" />
             Get Directions
           </Button>
-          <Button variant="outline" className="flex-1 border-gray-600 text-white hover:bg-gray-700">
+          <Button
+            variant="outline"
+            className="flex-1 border-gray-600 text-white hover:bg-gray-700"
+          >
             <Phone className="w-4 h-4 mr-2" />
             Call
           </Button>
