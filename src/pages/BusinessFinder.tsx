@@ -114,6 +114,28 @@ export function BusinessFinder() {
     }
   };
 
+  // Handle manual location selection from autocomplete
+  const handleLocationSelect = async (
+    lat: number,
+    lng: number,
+    displayName: string,
+  ) => {
+    const coords: [number, number] = [lat, lng];
+    setUserLocation(coords);
+
+    // Fetch nearby businesses for the selected location
+    setIsLoadingBusinesses(true);
+    try {
+      const businesses = await fetchNearbyBusinesses(lat, lng, 2000); // 2km radius
+      setNearbyBusinesses(businesses.slice(0, 25));
+    } catch (error) {
+      console.error("Error fetching nearby businesses:", error);
+      alert("Unable to fetch nearby businesses. Showing default list.");
+    } finally {
+      setIsLoadingBusinesses(false);
+    }
+  };
+
   // Handle business selection
   const handleSelectBusiness = (business: Business) => {
     setSelectedBusiness(business);
@@ -122,8 +144,8 @@ export function BusinessFinder() {
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+      <header className="sticky top-0 z-50 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 overflow-visible">
+        <div className="max-w-7xl mx-auto px-4 py-4 overflow-visible">
           {/* Top bar with logo and user */}
           <div className="flex items-center justify-between mb-4">
             {/* Logo and title */}
@@ -146,15 +168,15 @@ export function BusinessFinder() {
                     <span className="text-white text-sm font-medium">
                       {auth.user.name}
                     </span>
-                    {auth.user.role === 'admin' && (
+                    {auth.user.role === "admin" && (
                       <span className="ml-2 px-2 py-1 bg-purple-600 text-white text-xs rounded-full">
                         Admin
                       </span>
                     )}
                   </div>
-                  
+
                   {/* Admin Panel Button */}
-                  {auth.user.role === 'admin' && (
+                  {auth.user.role === "admin" && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -165,7 +187,7 @@ export function BusinessFinder() {
                       <span className="hidden sm:inline">Admin</span>
                     </Button>
                   )}
-                  
+
                   <Button
                     variant="ghost"
                     size="sm"
@@ -193,6 +215,7 @@ export function BusinessFinder() {
             value={searchQuery}
             onChange={setSearchQuery}
             onLocateUser={handleLocateUser}
+            onLocationSelect={handleLocationSelect}
           />
 
           {/* Category filter */}
@@ -277,11 +300,11 @@ export function BusinessFinder() {
           </div>
         </div>
       </main>
-      
+
       {/* Admin Panel Modal */}
-      <AdminPanel 
-        isOpen={isAdminPanelOpen} 
-        onClose={() => setIsAdminPanelOpen(false)} 
+      <AdminPanel
+        isOpen={isAdminPanelOpen}
+        onClose={() => setIsAdminPanelOpen(false)}
       />
     </div>
   );
