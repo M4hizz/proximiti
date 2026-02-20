@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "tsx server.ts",
+    "dev:all": "concurrently -n \"vite,server\" -c \"cyan,green\" \"vite\" \"tsx server.ts\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -21,6 +22,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/leaflet": "^1.9.21",
     "autoprefixer": "^10.4.23",
+    "bad-words": "^4.0.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.6.2",
     "body-parser": "^2.2.2",
@@ -53,6 +55,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
+    "concurrently": "^9.2.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
