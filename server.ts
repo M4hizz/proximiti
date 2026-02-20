@@ -591,14 +591,30 @@ app.get(
       const detailsData = (await detailsResp.json()) as any;
 
       // Check for rate limit errors
-      if (detailsData.error_message?.includes("quota") || detailsData.error_message?.includes("rate")) {
-        console.warn("Google Places API rate limited:", detailsData.error_message);
-        return res.status(429).json({ error: "Rate limited. Please wait before loading more reviews." });
+      if (
+        detailsData.error_message?.includes("quota") ||
+        detailsData.error_message?.includes("rate")
+      ) {
+        console.warn(
+          "Google Places API rate limited:",
+          detailsData.error_message,
+        );
+        return res
+          .status(429)
+          .json({
+            error: "Rate limited. Please wait before loading more reviews.",
+          });
       }
 
       if (detailsData.status && detailsData.status !== "OK") {
-        console.warn("Google Places API error:", detailsData.status, detailsData.error_message);
-        return res.status(400).json({ error: `Google API error: ${detailsData.status}` });
+        console.warn(
+          "Google Places API error:",
+          detailsData.status,
+          detailsData.error_message,
+        );
+        return res
+          .status(400)
+          .json({ error: `Google API error: ${detailsData.status}` });
       }
 
       const responseNextPageToken = detailsData.next_page_token ?? null;

@@ -13,7 +13,11 @@ interface BusinessCardProps {
  * Card component for displaying a business in the list view.
  * Shows key info at a glance with a clean, modern design.
  */
-export function BusinessCard({ business, isSelected, onClick }: BusinessCardProps) {
+export function BusinessCard({
+  business,
+  isSelected,
+  onClick,
+}: BusinessCardProps) {
   const [bookmarked, setBookmarked] = useState(() => isBookmarked(business.id));
 
   useEffect(() => {
@@ -39,7 +43,9 @@ export function BusinessCard({ business, isSelected, onClick }: BusinessCardProp
         {/* Business info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-gray-900 dark:text-white truncate">{business.name}</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+              {business.name}
+            </h3>
             <div className="flex items-center gap-2 flex-shrink-0">
               {bookmarked && (
                 <Bookmark className="w-5 h-5 fill-cherry-rose text-cherry-rose" />
