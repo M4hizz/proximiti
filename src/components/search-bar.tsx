@@ -67,7 +67,6 @@ export function SearchBar({
 
     const timeoutId = setTimeout(async () => {
       setIsLoadingSuggestions(true);
-      console.log("Fetching suggestions for:", locationQuery);
       try {
         // Using Nominatim (OpenStreetMap) geocoding API with POI support
         // This includes addresses, landmarks, schools, buildings, and other named locations
@@ -86,7 +85,6 @@ export function SearchBar({
           },
         );
         const data = await response.json();
-        console.log("Received suggestions:", data);
 
         // Remove duplicates based on proximity and name similarity
         const uniqueResults = data.reduce(
@@ -282,7 +280,7 @@ export function SearchBar({
         {(showDropdown || isLoadingSuggestions) &&
           locationQuery.length >= 3 && (
             <div
-              className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border-2 border-green-500 rounded-xl shadow-2xl max-h-96 overflow-y-auto z-[9999]"
+              className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border-2 border-green-500 rounded-xl shadow-2xl max-h-96 overflow-y-auto z-9999"
               style={{ minWidth: "300px" }}
             >
               {isLoadingSuggestions ? (

@@ -11,7 +11,6 @@ import {
   Flame,
   Sparkles,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 export function DiscoveryPage() {
   const [searchValue, setSearchValue] = useState("");

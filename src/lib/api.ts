@@ -1,36 +1,148 @@
 /**
- * API service for fetching real business data from OpenStreetMap via Overpass API
+ * API service for fetching real business data.
+ * Primary: Google Places (New) via the server proxy.
+ * Fallback: OpenStreetMap via Overpass API.
  */
 
 import type { Business } from "./businesses";
 
+const BASE_URL =
+  (import.meta as any).env?.VITE_API_URL ?? "http://localhost:3001/api";
+
 // Map OSM amenity types to our categories
 const CATEGORY_MAPPING: Record<string, string> = {
+  // Food & Drink
   restaurant: "food",
   cafe: "coffee",
   fast_food: "food",
   bar: "food",
   pub: "food",
+  food_court: "food",
+  biergarten: "food",
+  ice_cream: "food",
+  bakery: "food",
+  pizza: "food",
+  sushi: "food",
+  bbq: "food",
+  deli: "food",
+  food_truck: "food",
+  juice_bar: "food",
+  bubble_tea: "coffee",
+  coffee_shop: "coffee",
+  tea_house: "coffee",
+  // Retail / Shopping
   shop: "retail",
   supermarket: "retail",
   convenience: "retail",
   clothes: "retail",
   bookshop: "retail",
+  books: "retail",
   electronics: "retail",
+  mobile_phone: "retail",
+  department_store: "retail",
+  mall: "retail",
+  marketplace: "retail",
+  hardware: "retail",
+  furniture: "retail",
+  sports: "retail",
+  toys: "retail",
+  jewelry: "retail",
+  gift: "retail",
+  florist: "retail",
+  pet: "retail",
+  bicycle: "retail",
+  outdoor: "retail",
+  variety_store: "retail",
+  discount: "retail",
+  second_hand: "retail",
+  cosmetics: "retail",
+  optician: "retail",
+  shoes: "retail",
+  bags: "retail",
+  stationery: "retail",
+  copyshop: "retail",
+  art: "retail",
+  antiques: "retail",
+  music: "retail",
+  video_games: "retail",
+  car: "retail",
+  car_parts: "retail",
+  tyres: "retail",
+  alcohol: "retail",
+  wine: "retail",
+  cheese: "retail",
+  greengrocer: "retail",
+  butcher: "retail",
+  seafood: "retail",
+  confectionery: "retail",
+  chocolate: "retail",
+  health_food: "retail",
+  farm: "retail",
+  // Health & Wellness
   gym: "health",
   fitness_centre: "health",
   doctors: "health",
   dentist: "health",
   pharmacy: "health",
   spa: "health",
+  clinic: "health",
+  hospital: "health",
+  physiotherapist: "health",
+  psychologist: "health",
+  chiropractor: "health",
+  optometrist: "health",
+  veterinary: "health",
+  massage: "health",
+  yoga: "health",
+  pilates: "health",
+  swimming_pool: "health",
+  sports_centre: "health",
+  // Entertainment
   cinema: "entertainment",
   theatre: "entertainment",
   nightclub: "entertainment",
+  bowling_alley: "entertainment",
+  arcade: "entertainment",
+  escape_game: "entertainment",
+  amusement_park: "entertainment",
+  miniature_golf: "entertainment",
+  golf_course: "entertainment",
+  sports_hall: "entertainment",
+  stadium: "entertainment",
+  museum: "entertainment",
+  art_gallery: "entertainment",
+  casino: "entertainment",
+  karaoke_box: "entertainment",
+  laser_game: "entertainment",
+  // Services
   car_repair: "services",
   mechanic: "services",
   car_wash: "services",
   hairdresser: "services",
   beauty: "services",
+  nail_salon: "services",
+  barber: "services",
+  laundry: "services",
+  dry_cleaning: "services",
+  bank: "services",
+  atm: "services",
+  post_office: "services",
+  travel_agency: "services",
+  real_estate: "services",
+  insurance: "services",
+  accountant: "services",
+  lawyer: "services",
+  notary: "services",
+  tailor: "services",
+  photo: "services",
+  printing: "services",
+  fuel: "services",
+  charging_station: "services",
+  car_rental: "services",
+  hotel: "services",
+  hostel: "services",
+  motel: "services",
+  guest_house: "services",
 };
 
 interface OSMElement {
@@ -65,36 +177,78 @@ interface OSMElement {
  * @param radius Radius in meters (default: 2000m = 2km)
  * @returns Array of Business objects
  */
+/** Search for businesses by name/keyword near a location using Google Places Text Search. */
+export async function searchBusinesses(
+  query: string,
+  lat: number,
+  lng: number,
+  radius: number = 5000,
+): Promise<Business[]> {
+  try {
+    const params = new URLSearchParams({
+      query,
+      lat: String(lat),
+      lng: String(lng),
+      radius: String(radius),
+    });
+    const res = await fetch(`${BASE_URL}/places/search?${params}`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { businesses?: Business[] };
+    return data.businesses ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Try Google Places (New) via server proxy first – returns full Business array or null. */
+async function fetchNearbyFromGoogle(
+  lat: number,
+  lng: number,
+  radius: number,
+): Promise<Business[] | null> {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/places/nearby?lat=${lat}&lng=${lng}&radius=${radius}`,
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      console.warn(`Google Places nearby failed (${res.status}):`, err);
+      return null;
+    }
+    const data = (await res.json()) as {
+      businesses?: Business[];
+      error?: string;
+    };
+    if (data.error) console.warn("Google Places nearby error:", data.error);
+    if (data.businesses && data.businesses.length > 0) return data.businesses;
+    return null;
+  } catch (e) {
+    console.warn("Google Places nearby fetch threw:", e);
+    return null;
+  }
+}
+
 export async function fetchNearbyBusinesses(
   lat: number,
   lng: number,
   radius: number = 2000,
 ): Promise<Business[]> {
+  // ── 1. Try Google Places (comprehensive, includes chains like Starbucks) ──
+  const googleResults = await fetchNearbyFromGoogle(lat, lng, radius);
+  if (googleResults) return googleResults;
+
+  // ── 2. Fall back to OpenStreetMap / Overpass via server proxy (avoids CSP) ──
   try {
-    // Overpass API query for various amenities and shops
-    const query = `
-      [out:json][timeout:25];
-      (
-        node["amenity"~"restaurant|cafe|fast_food|bar|pub|gym|fitness_centre|cinema|theatre|doctors|pharmacy|spa"](around:${radius},${lat},${lng});
-        node["shop"~"supermarket|convenience|clothes|bookshop|electronics"](around:${radius},${lat},${lng});
-        way["amenity"~"restaurant|cafe|fast_food|bar|pub|gym|fitness_centre|cinema|theatre|doctors|pharmacy|spa"](around:${radius},${lat},${lng});
-        way["shop"~"supermarket|convenience|clothes|bookshop|electronics"](around:${radius},${lat},${lng});
+    const osmRes = await fetch(
+      `${BASE_URL}/osm/nearby?lat=${lat}&lng=${lng}&radius=${radius}`,
+    );
+    if (!osmRes.ok) {
+      console.warn(
+        `OSM proxy returned ${osmRes.status} — skipping OSM fallback`,
       );
-      out body;
-      >;
-      out skel qt;
-    `;
-
-    const response = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      body: query,
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to fetch from Overpass API");
+      return [];
     }
-
-    const data = await response.json();
+    const data = await osmRes.json();
     const businesses: Business[] = [];
     const seenIds = new Set<string>();
     const seenBusinesses = new Map<string, { lat: number; lon: number }>();
@@ -145,72 +299,70 @@ export async function fetchNearbyBusinesses(
         addressParts.push(element.tags["addr:city"]);
 
       if (addressParts.length >= 2) {
-        // We have at least street + city, use it
         address = addressParts.join(", ");
+      } else if (addressParts.length === 1) {
+        address = addressParts[0];
       } else {
-        // Strategy 2: Use reverse geocoding to get full address
-        // We'll batch these requests to avoid rate limiting
-        try {
-          const reverseGeoResponse = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?` +
-              `format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
-            {
-              headers: {
-                "User-Agent": "Proximiti Business Finder",
-              },
-            },
-          );
-
-          if (reverseGeoResponse.ok) {
-            const geoData = await reverseGeoResponse.json();
-            const addr = geoData.address;
-            const parts = [];
-
-            if (addr.house_number && addr.road) {
-              parts.push(`${addr.house_number} ${addr.road}`);
-            } else if (addr.road) {
-              parts.push(addr.road);
-            }
-
-            if (addr.city || addr.town || addr.village) {
-              parts.push(addr.city || addr.town || addr.village);
-            }
-
-            if (parts.length > 0) {
-              address = parts.join(", ");
-            }
-          }
-
-          // Small delay to respect rate limits
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        } catch (e) {
-          console.log("Reverse geocoding failed for", element.tags.name);
-        }
-
-        // If still no address, use nearby landmark
-        if (!address) {
-          address = `Near ${element.tags.name}`;
-        }
+        // No address tags at all – use suburb/neighbourhood if available
+        const suburb =
+          element.tags["addr:suburb"] ||
+          element.tags["addr:neighbourhood"] ||
+          element.tags["addr:city"];
+        address = suburb
+          ? suburb
+          : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
       }
 
       // Get random rating for now (in a real app, you'd fetch this from reviews)
       const rating = Math.round((Math.random() * 1.5 + 3.5) * 10) / 10; // 3.5-5.0
       const reviewCount = Math.floor(Math.random() * 300) + 20;
 
-      // Default image based on category
-      const categoryImages: Record<string, string> = {
-        food: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop",
-        coffee:
+      // Pick a consistent, category-appropriate image from a curated Unsplash pool.
+      // Deterministic selection by hashing the business name so the same place always
+      // gets the same image across page loads.
+      const categoryImagePools: Record<string, string[]> = {
+        food: [
+          "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop",
+        ],
+        coffee: [
+          "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=300&fit=crop",
           "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400&h=300&fit=crop",
-        retail:
+          "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=400&h=300&fit=crop",
+        ],
+        retail: [
+          "https://images.unsplash.com/photo-1567401893414-76b7b1e5a7a5?w=400&h=300&fit=crop",
           "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop",
-        health:
+          "https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=400&h=300&fit=crop",
+        ],
+        health: [
+          "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=300&fit=crop",
           "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=300&fit=crop",
-        entertainment:
+        ],
+        entertainment: [
+          "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400&h=300&fit=crop",
           "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&h=300&fit=crop",
-        services:
+          "https://images.unsplash.com/photo-1507924538820-ede94a04019d?w=400&h=300&fit=crop",
+        ],
+        services: [
+          "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=400&h=300&fit=crop",
           "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=400&h=300&fit=crop",
+          "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&h=300&fit=crop",
+        ],
       };
+      const pool = categoryImagePools[category] ?? categoryImagePools.food;
+      // Simple djb2 hash of business name for stable deterministic index
+      const nameHash = (element.tags.name ?? "")
+        .split("")
+        .reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0);
+      const streetViewImage = pool[nameHash % pool.length];
 
       // Format opening hours with proper day breakdown
       let hours = "";
@@ -300,11 +452,13 @@ export async function fetchNearbyBusinesses(
         address,
         hours,
         description: `${element.tags.name} - ${amenityType.replace(/_/g, " ")}`,
-        image: categoryImages[category] || categoryImages.food,
+        image: streetViewImage,
         lat: latitude,
         lng: longitude,
         phone,
         priceLevel: "$$",
+        website:
+          element.tags.website || element.tags["contact:website"] || undefined,
       };
 
       businesses.push(business);
@@ -312,7 +466,7 @@ export async function fetchNearbyBusinesses(
 
     return businesses;
   } catch (error) {
-    console.error("Error fetching nearby businesses:", error);
-    throw error;
+    console.warn("OSM nearby fetch failed, returning empty result:", error);
+    return [];
   }
 }

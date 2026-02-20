@@ -24,6 +24,7 @@ export function ProximitiReviewsTab({ businessId }: ProximitiReviewsTabProps) {
   );
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
   const [offset, setOffset] = useState(PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,8 +50,9 @@ export function ProximitiReviewsTab({ businessId }: ProximitiReviewsTabProps) {
   }, [loadInitial]);
 
   const loadMore = async () => {
-    if (loadingMore) return;
+    if (loadingMore || cooldown) return;
     setLoadingMore(true);
+    setCooldown(true);
     try {
       const res = await fetchProximitiReviews(businessId, PAGE_SIZE, offset);
       setDisplayedReviews((prev) => [...prev, ...res.reviews]);
@@ -60,6 +62,7 @@ export function ProximitiReviewsTab({ businessId }: ProximitiReviewsTabProps) {
       // ignore
     } finally {
       setLoadingMore(false);
+      setTimeout(() => setCooldown(false), 3000);
     }
   };
 
@@ -173,13 +176,15 @@ export function ProximitiReviewsTab({ businessId }: ProximitiReviewsTabProps) {
         <Button
           variant="outline"
           onClick={loadMore}
-          disabled={loadingMore}
+          disabled={loadingMore || cooldown}
           className="w-full border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
         >
           {loadingMore ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading…
             </>
+          ) : cooldown ? (
+            "Please wait…"
           ) : (
             "Show More Reviews"
           )}

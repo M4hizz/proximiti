@@ -6,6 +6,23 @@ import { toggleHelpful } from "@/lib/reviewApi";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/App";
 
+const AVATAR_COLOURS = [
+  "bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300",
+  "bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300",
+  "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300",
+  "bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300",
+  "bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300",
+  "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
+  "bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300",
+  "bg-pink-100 dark:bg-pink-900 text-pink-700 dark:text-pink-300",
+];
+function avatarColour(name: string): string {
+  const hash = name
+    .split("")
+    .reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0);
+  return AVATAR_COLOURS[hash % AVATAR_COLOURS.length];
+}
+
 interface ReviewCardProps {
   review: ProximitiReview;
   onHelpfulToggled?: (reviewId: string, isNowHelpful: boolean) => void;
@@ -51,7 +68,9 @@ export function ReviewCard({ review, onHelpfulToggled }: ReviewCardProps) {
       {/* Header */}
       <div className="flex items-start gap-3">
         {/* Avatar */}
-        <div className="shrink-0 w-9 h-9 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-sm font-semibold text-green-700 dark:text-green-300">
+        <div
+          className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${avatarColour(review.userName)}`}
+        >
           {initials}
         </div>
         <div className="flex-1 min-w-0">

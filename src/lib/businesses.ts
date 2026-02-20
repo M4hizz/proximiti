@@ -17,6 +17,7 @@ export interface Business {
   lng: number;
   phone: string;
   priceLevel: string;
+  website?: string;
 }
 
 export const categories = [
@@ -41,11 +42,12 @@ export const businesses: Business[] = [
     description:
       "Farm-to-table restaurant serving organic, locally-sourced dishes. Known for their seasonal menu and sustainable practices.",
     image:
-      "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=400&h=300&fit=crop",
     lat: 43.6532,
     lng: -79.3832,
     phone: "(416) 123-4567",
     priceLevel: "$$",
+    website: "https://www.thegreenkitchen.ca",
   },
   {
     id: "2",
@@ -58,11 +60,12 @@ export const businesses: Business[] = [
     description:
       "Artisan coffee roasters with a cozy atmosphere. Try our signature cold brew and fresh-baked pastries.",
     image:
-      "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=300&fit=crop",
     lat: 43.6514,
     lng: -79.3598,
     phone: "(416) 234-5678",
     priceLevel: "$",
+    website: "https://www.urbanbrewscoffee.com",
   },
   {
     id: "3",
@@ -75,11 +78,12 @@ export const businesses: Business[] = [
     description:
       "Your one-stop shop for the latest gadgets, computers, and electronics. Expert staff ready to help.",
     image:
-      "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&h=300&fit=crop",
     lat: 43.589,
     lng: -79.6441,
     phone: "(905) 345-6789",
     priceLevel: "$$$",
+    website: "https://www.techhaven.ca",
   },
   {
     id: "4",
@@ -92,11 +96,12 @@ export const businesses: Business[] = [
     description:
       "Modern fitness center offering yoga, pilates, and HIIT classes. Personal training available.",
     image:
-      "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop",
     lat: 43.7615,
     lng: -79.4111,
     phone: "(416) 456-7890",
     priceLevel: "$$",
+    website: "https://www.zenfitnessstudio.ca",
   },
   {
     id: "5",
@@ -109,11 +114,12 @@ export const businesses: Business[] = [
     description:
       "Trusted auto repair shop with certified mechanics. Oil changes, brake service, and full diagnostics.",
     image:
-      "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=400&h=300&fit=crop",
     lat: 43.7001,
     lng: -79.4444,
     phone: "(416) 567-8901",
     priceLevel: "$$",
+    website: "https://www.quickfixauto.ca",
   },
   {
     id: "6",
@@ -126,11 +132,12 @@ export const businesses: Business[] = [
     description:
       "Luxury movie theater with reclining seats, IMAX screens, and a full-service bar and restaurant.",
     image:
-      "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400&h=300&fit=crop",
     lat: 43.7731,
     lng: -79.2364,
     phone: "(416) 678-9012",
     priceLevel: "$$",
+    website: "https://www.cinemaparadise.ca",
   },
   {
     id: "7",
@@ -148,6 +155,7 @@ export const businesses: Business[] = [
     lng: -79.4003,
     phone: "(416) 789-0123",
     priceLevel: "$$$",
+    website: "https://www.bellaitalia.ca",
   },
   {
     id: "8",
@@ -160,11 +168,12 @@ export const businesses: Business[] = [
     description:
       "Trendy clothing store featuring local designers and sustainable fashion. Personal styling available.",
     image:
-      "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1567401893414-76b7b1e5a7a5?w=400&h=300&fit=crop",
     lat: 43.6677,
     lng: -79.4103,
     phone: "(416) 890-1234",
     priceLevel: "$$",
+    website: "https://www.styleboutiqueto.com",
   },
   {
     id: "9",
@@ -177,11 +186,12 @@ export const businesses: Business[] = [
     description:
       "Japanese-inspired tea house specializing in premium matcha drinks and traditional desserts.",
     image:
-      "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&h=300&fit=crop",
     lat: 43.6762,
     lng: -79.3487,
     phone: "(416) 901-2345",
     priceLevel: "$",
+    website: "https://www.matchahouse.ca",
   },
   {
     id: "10",
@@ -194,11 +204,12 @@ export const businesses: Business[] = [
     description:
       "Full-service day spa offering massages, facials, and body treatments. Couples packages available.",
     image:
-      "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400&h=300&fit=crop",
     lat: 43.6205,
     lng: -79.5132,
     phone: "(416) 012-3456",
     priceLevel: "$$$",
+    website: "https://www.serenityspa.ca",
   },
 ];
 

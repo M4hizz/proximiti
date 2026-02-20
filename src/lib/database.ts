@@ -115,6 +115,15 @@ class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
     `);
 
+    // Photo cache: stores resolved Google Places photo URLs keyed by business
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS business_photos (
+        cache_key TEXT PRIMARY KEY,
+        photo_url TEXT NOT NULL,
+        cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create the first admin user if no users exist
     this.createDefaultAdmin();
   }
@@ -126,13 +135,23 @@ class DatabaseManager {
 
     if (userCount.count === 0) {
       console.log("Creating default admin user...");
-      this.createUser({
-        email: "admin@proximiti.local",
-        name: "Administrator",
-        role: "admin",
-        password: "admin123", // Should be changed immediately
-        isVerified: true,
-      });
+      // Use synchronous bcrypt hash so the insertion is atomic with the rest
+      // of initializeTables (which runs in the constructor and cannot be async).
+      const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || "12");
+      const hashedPassword = bcrypt.hashSync("admin123", saltRounds);
+      this.db
+        .prepare(
+          `INSERT INTO users (email, name, google_id, role, hashed_password, is_verified)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "admin@proximiti.local",
+          "Administrator",
+          null,
+          "admin",
+          hashedPassword,
+          1,
+        );
       console.log(
         "Default admin user created. Email: admin@proximiti.local, Password: admin123",
       );
@@ -500,6 +519,23 @@ class DatabaseManager {
         .run(reviewId);
       return true;
     }
+  }
+
+  // ─── Photo cache ─────────────────────────────────────────────────────────────
+
+  cachePhoto(key: string, photoUrl: string): void {
+    this.db
+      .prepare(
+        "INSERT OR REPLACE INTO business_photos (cache_key, photo_url) VALUES (?, ?)",
+      )
+      .run(key, photoUrl);
+  }
+
+  getCachedPhoto(key: string): string | null {
+    const row = this.db
+      .prepare("SELECT photo_url FROM business_photos WHERE cache_key = ?")
+      .get(key) as { photo_url: string } | undefined;
+    return row?.photo_url ?? null;
   }
 
   // ─── Session management ─────────────────────────────────────────────────────

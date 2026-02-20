@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home,
@@ -42,7 +41,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleNavigation = (href: string, label: string) => {
+  const handleNavigation = (href: string, _label: string) => {
     navigate(href);
   };
 
