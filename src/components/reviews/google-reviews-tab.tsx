@@ -12,7 +12,7 @@ interface GoogleReviewsTabProps {
   googleRating?: number;
 }
 
-const INITIAL_COUNT = 3;
+const INITIAL_COUNT = 5;
 const LOAD_MORE_COUNT = 5;
 
 /** Formats a Unix timestamp to a human-readable date string. */
@@ -41,6 +41,8 @@ export function GoogleReviewsTab({
     googleRating ?? null,
   );
   const [totalRatings, setTotalRatings] = useState<number | null>(null);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [hasMorePages, setHasMorePages] = useState(false);
 
   const loadGoogleReviews = useCallback(async () => {
     setLoading(true);
@@ -48,6 +50,8 @@ export function GoogleReviewsTab({
     try {
       const data = await fetchGoogleReviews(businessName, lat, lng);
       setReviews(data.reviews);
+      setNextPageToken(data.nextPageToken);
+      setHasMorePages(data.nextPageToken !== null);
       if (data.googleRating !== null) setLiveRating(data.googleRating);
       if (data.totalRatings !== null) setTotalRatings(data.totalRatings);
     } catch (err: any) {
@@ -61,19 +65,41 @@ export function GoogleReviewsTab({
     }
   }, [businessName, lat, lng]);
 
+  const loadMoreGoogleReviews = useCallback(async () => {
+    if (!nextPageToken) {
+      return;
+    }
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const data = await fetchGoogleReviews(businessName, lat, lng, nextPageToken);
+      setReviews((prev) => [...prev, ...data.reviews]);
+      setNextPageToken(data.nextPageToken);
+      setHasMorePages(data.nextPageToken !== null);
+      setDisplayCount((prev) => prev + LOAD_MORE_COUNT);
+    } catch (err: any) {
+      const errorMsg = err.message || "Could not load more reviews.";
+      if (errorMsg.includes("429") || errorMsg.includes("rate")) {
+        setError("Rate limited by Google. Please wait a moment and try again.");
+      } else {
+        setError(errorMsg);
+      }
+      console.error("Error loading more reviews:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [businessName, lat, lng, nextPageToken]);
+
   useEffect(() => {
     loadGoogleReviews();
   }, [loadGoogleReviews]);
 
   const handleShowMore = () => {
-    setLoadingMore(true);
-    // We batch-show more from already-fetched reviews (Google returns up to 5 per request)
-    setDisplayCount((prev) => prev + LOAD_MORE_COUNT);
-    setLoadingMore(false);
+    loadMoreGoogleReviews();
   };
 
   const displayedReviews = reviews.slice(0, displayCount);
-  const canShowMore = displayCount < reviews.length;
+  const canShowMore = hasMorePages || (displayCount < reviews.length);
 
   if (!apiConfigured) {
     return (
@@ -224,6 +250,8 @@ export function GoogleReviewsTab({
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading…
             </>
+          ) : hasMorePages ? (
+            "Load More Reviews"
           ) : (
             `Show More (${reviews.length - displayCount} remaining)`
           )}

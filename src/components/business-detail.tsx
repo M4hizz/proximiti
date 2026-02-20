@@ -1,7 +1,9 @@
+import { useState, useEffect } from "react";
 import type { Business } from "@/lib/businesses";
-import { Star, MapPin, Clock, Phone, X, Navigation } from "lucide-react";
+import { Star, MapPin, Clock, Phone, X, Navigation, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
+import { isBookmarked, toggleBookmark } from "@/lib/bookmarks";
 
 interface BusinessDetailProps {
   business: Business;
@@ -13,6 +15,18 @@ interface BusinessDetailProps {
  * Shows full information including description, contact, and actions.
  */
 export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
+  const [isBookmarkedState, setIsBookmarkedState] = useState(() =>
+    isBookmarked(business.id)
+  );
+
+  useEffect(() => {
+    setIsBookmarkedState(isBookmarked(business.id));
+  }, [business.id]);
+
+  const handleToggleBookmark = () => {
+    toggleBookmark(business.id);
+    setIsBookmarkedState(!isBookmarkedState);
+  };
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none flex flex-col max-h-[calc(100vh-8rem)]">
       {/* Header image */}
@@ -116,6 +130,18 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
           >
             <Navigation className="w-4 h-4 mr-2" />
             Get Directions
+          </Button>
+          <Button
+            variant="outline"
+            className={`flex-1 transition-colors ${
+              isBookmarkedState
+                ? "border-cherry-rose text-cherry-rose dark:border-cherry-rose dark:text-cherry-rose hover:bg-cherry-rose hover:text-white"
+                : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+            onClick={handleToggleBookmark}
+          >
+            <Bookmark className={`w-4 h-4 mr-2 ${isBookmarkedState ? "fill-current" : ""}`} />
+            {isBookmarkedState ? "Bookmarked" : "Bookmark"}
           </Button>
           <Button
             variant="outline"

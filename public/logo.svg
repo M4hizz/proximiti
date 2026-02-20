@@ -1,0 +1,26 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer blue circle -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="#2563eb" stroke-width="20" opacity="0.6"/>
+  
+  <!-- Middle blue circle -->
+  <circle cx="100" cy="100" r="70" fill="none" stroke="#2563eb" stroke-width="15" opacity="0.8"/>
+  
+  <!-- Inner circle background -->
+  <circle cx="100" cy="100" r="50" fill="#f5f5f5"/>
+  
+  <!-- Compass needle pointing northeast -->
+  <g transform="translate(100, 100) rotate(-45)">
+    <!-- Compass arm top -->
+    <polygon points="0,-50 -12,-10 0,0 12,-10" fill="#2563eb"/>
+    <!-- Compass arm bottom -->
+    <polygon points="0,50 -8,10 0,0 8,10" fill="#1e40af" opacity="0.7"/>
+    <!-- Center dot -->
+    <circle cx="0" cy="0" r="8" fill="#2563eb"/>
+  </g>
+  
+  <!-- P letter shape -->
+  <g transform="translate(100, 100)">
+    <path d="M -5,-15 L -5,15 M -5,-15 Q 5,-15 5,-8 Q 5,-2 -5,-2" 
+          fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

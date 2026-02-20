@@ -1,5 +1,7 @@
+import { useState, useEffect } from "react";
 import type { Business } from "@/lib/businesses";
-import { Star, MapPin, Clock } from "lucide-react";
+import { Star, MapPin, Clock, Bookmark } from "lucide-react";
+import { isBookmarked } from "@/lib/bookmarks";
 
 interface BusinessCardProps {
   business: Business;
@@ -12,6 +14,11 @@ interface BusinessCardProps {
  * Shows key info at a glance with a clean, modern design.
  */
 export function BusinessCard({ business, isSelected, onClick }: BusinessCardProps) {
+  const [bookmarked, setBookmarked] = useState(() => isBookmarked(business.id));
+
+  useEffect(() => {
+    setBookmarked(isBookmarked(business.id));
+  }, [business.id]);
   return (
     <button
       onClick={onClick}
@@ -33,9 +40,14 @@ export function BusinessCard({ business, isSelected, onClick }: BusinessCardProp
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold text-gray-900 dark:text-white truncate">{business.name}</h3>
-            <span className="text-green-600 dark:text-green-400 font-medium text-sm flex-shrink-0">
-              {business.priceLevel}
-            </span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {bookmarked && (
+                <Bookmark className="w-5 h-5 fill-cherry-rose text-cherry-rose" />
+              )}
+              <span className="text-green-600 dark:text-green-400 font-medium text-sm">
+                {business.priceLevel}
+              </span>
+            </div>
           </div>
 
           {/* Rating */}
