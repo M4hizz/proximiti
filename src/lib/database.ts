@@ -1,7 +1,7 @@
-import Database from 'better-sqlite3';
-import bcrypt from 'bcrypt';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import Database from "better-sqlite3";
+import bcrypt from "bcrypt";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,14 +11,27 @@ export interface User {
   email: string;
   name: string;
   googleId?: string;
-  role: 'user' | 'admin';
-  hashedPassword?: string;  // For non-Google users
+  role: "user" | "admin";
+  hashedPassword?: string; // For non-Google users
   isVerified: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface DatabaseUser extends Omit<User, 'id'> {
+export interface Review {
+  id: string;
+  businessId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  rating: number;
+  text: string;
+  helpfulCount: number;
+  userFoundHelpful?: boolean;
+  createdAt: string;
+}
+
+export interface DatabaseUser extends Omit<User, "id"> {
   id: number;
 }
 
@@ -32,8 +45,8 @@ class DatabaseManager {
 
   private initializeTables(): void {
     // Enable foreign keys
-    this.db.pragma('foreign_keys = ON');
-    
+    this.db.pragma("foreign_keys = ON");
+
     // Create users table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS users (
@@ -65,12 +78,41 @@ class DatabaseManager {
       )
     `);
 
+    // Create reviews table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+        text TEXT NOT NULL,
+        helpful_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        UNIQUE (business_id, user_id)
+      )
+    `);
+
+    // Create review_helpful pivot table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS review_helpful (
+        review_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (review_id, user_id),
+        FOREIGN KEY (review_id) REFERENCES reviews (id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes for performance
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
       CREATE INDEX IF NOT EXISTS idx_sessions_jti ON sessions(jti);
       CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_reviews_business ON reviews(business_id);
+      CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
     `);
 
     // Create the first admin user if no users exist
@@ -78,35 +120,48 @@ class DatabaseManager {
   }
 
   private createDefaultAdmin(): void {
-    const userCount = this.db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-    
+    const userCount = this.db
+      .prepare("SELECT COUNT(*) as count FROM users")
+      .get() as { count: number };
+
     if (userCount.count === 0) {
-      console.log('Creating default admin user...');
+      console.log("Creating default admin user...");
       this.createUser({
-        email: 'admin@proximiti.local',
-        name: 'Administrator',
-        role: 'admin',
-        password: 'admin123', // Should be changed immediately
-        isVerified: true
+        email: "admin@proximiti.local",
+        name: "Administrator",
+        role: "admin",
+        password: "admin123", // Should be changed immediately
+        isVerified: true,
       });
-      console.log('Default admin user created. Email: admin@proximiti.local, Password: admin123');
-      console.log('IMPORTANT: Change the admin password immediately after first login!');
+      console.log(
+        "Default admin user created. Email: admin@proximiti.local, Password: admin123",
+      );
+      console.log(
+        "IMPORTANT: Change the admin password immediately after first login!",
+      );
     }
   }
 
   async createUser(userData: {
     email: string;
     name: string;
-    role?: 'user' | 'admin';
+    role?: "user" | "admin";
     password?: string;
     googleId?: string;
     isVerified?: boolean;
   }): Promise<User> {
-    const { email, name, role = 'user', password, googleId, isVerified = false } = userData;
-    
+    const {
+      email,
+      name,
+      role = "user",
+      password,
+      googleId,
+      isVerified = false,
+    } = userData;
+
     let hashedPassword: string | null = null;
     if (password && !googleId) {
-      const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
+      const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || "12");
       hashedPassword = await bcrypt.hash(password, saltRounds);
     }
 
@@ -116,11 +171,18 @@ class DatabaseManager {
     `);
 
     try {
-      const result = stmt.run(email, name, googleId ?? null, role, hashedPassword, isVerified ? 1 : 0);
+      const result = stmt.run(
+        email,
+        name,
+        googleId ?? null,
+        role,
+        hashedPassword,
+        isVerified ? 1 : 0,
+      );
       return this.getUserById(result.lastInsertRowid as number);
     } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        throw new Error('User with this email already exists');
+      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+        throw new Error("User with this email already exists");
       }
       throw error;
     }
@@ -135,7 +197,7 @@ class DatabaseManager {
     `);
     const user = stmt.get(id) as DatabaseUser | undefined;
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
     return { ...user, id: user.id.toString() };
   }
@@ -170,7 +232,7 @@ class DatabaseManager {
       FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
     `);
     const users = stmt.all(limit, offset) as DatabaseUser[];
-    return users.map(user => ({ ...user, id: user.id.toString() }));
+    return users.map((user) => ({ ...user, id: user.id.toString() }));
   }
 
   async verifyPassword(email: string, password: string): Promise<User | null> {
@@ -178,33 +240,33 @@ class DatabaseManager {
     if (!user || !user.hashedPassword) {
       return null;
     }
-    
+
     const isValid = await bcrypt.compare(password, user.hashedPassword);
     return isValid ? user : null;
   }
 
-  updateUser(id: string, updates: Partial<Omit<User, 'id'>>): User {
+  updateUser(id: string, updates: Partial<Omit<User, "id">>): User {
     const fields: string[] = [];
     const values: any[] = [];
 
     Object.entries(updates).forEach(([key, value]) => {
       if (value !== undefined) {
         // Convert camelCase to snake_case
-        const dbKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+        const dbKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
         fields.push(`${dbKey} = ?`);
         values.push(value);
       }
     });
 
     if (fields.length === 0) {
-      throw new Error('No valid fields to update');
+      throw new Error("No valid fields to update");
     }
 
-    fields.push('updated_at = CURRENT_TIMESTAMP');
+    fields.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
 
     const stmt = this.db.prepare(`
-      UPDATE users SET ${fields.join(', ')} WHERE id = ?
+      UPDATE users SET ${fields.join(", ")} WHERE id = ?
     `);
 
     stmt.run(...values);
@@ -212,7 +274,7 @@ class DatabaseManager {
   }
 
   deleteUser(id: string): boolean {
-    const stmt = this.db.prepare('DELETE FROM users WHERE id = ?');
+    const stmt = this.db.prepare("DELETE FROM users WHERE id = ?");
     const result = stmt.run(id);
     return result.changes > 0;
   }
@@ -236,23 +298,211 @@ class DatabaseManager {
   }
 
   revokeSession(jti: string): void {
-    const stmt = this.db.prepare('DELETE FROM sessions WHERE jti = ?');
+    const stmt = this.db.prepare("DELETE FROM sessions WHERE jti = ?");
     stmt.run(jti);
   }
 
   revokeAllUserSessions(userId: string): void {
-    const stmt = this.db.prepare('DELETE FROM sessions WHERE user_id = ?');
+    const stmt = this.db.prepare("DELETE FROM sessions WHERE user_id = ?");
     stmt.run(userId);
   }
 
   // Clean up expired sessions
   cleanupExpiredSessions(): void {
-    const stmt = this.db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')");
+    const stmt = this.db.prepare(
+      "DELETE FROM sessions WHERE expires_at <= datetime('now')",
+    );
     const result = stmt.run();
     if (result.changes > 0) {
       console.log(`Cleaned up ${result.changes} expired sessions`);
     }
   }
+
+  // ─── Review Methods ────────────────────────────────────────────────────────
+
+  createReview(
+    businessId: string,
+    userId: string,
+    rating: number,
+    text: string,
+  ): Review {
+    const stmt = this.db.prepare(`
+      INSERT INTO reviews (business_id, user_id, rating, text)
+      VALUES (?, ?, ?, ?)
+    `);
+    try {
+      const result = stmt.run(businessId, userId, rating, text);
+      return this.getReviewById(result.lastInsertRowid as number);
+    } catch (error: any) {
+      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+        throw new Error("You have already reviewed this business");
+      }
+      throw error;
+    }
+  }
+
+  getReviewById(id: number, requestingUserId?: string): Review {
+    const row = this.db
+      .prepare(
+        `
+      SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
+             r.rating, r.text, r.helpful_count, r.created_at
+      FROM reviews r
+      JOIN users u ON u.id = r.user_id
+      WHERE r.id = ?
+    `,
+      )
+      .get(id) as any;
+    if (!row) throw new Error("Review not found");
+
+    let userFoundHelpful = false;
+    if (requestingUserId) {
+      const h = this.db
+        .prepare(
+          "SELECT 1 FROM review_helpful WHERE review_id = ? AND user_id = ?",
+        )
+        .get(id, requestingUserId);
+      userFoundHelpful = !!h;
+    }
+
+    return {
+      id: row.id.toString(),
+      businessId: row.business_id,
+      userId: row.user_id.toString(),
+      userName: row.user_name,
+      userEmail: row.user_email,
+      rating: row.rating,
+      text: row.text,
+      helpfulCount: row.helpful_count,
+      userFoundHelpful,
+      createdAt: row.created_at,
+    };
+  }
+
+  getReviewsForBusiness(
+    businessId: string,
+    limit: number = 10,
+    offset: number = 0,
+    requestingUserId?: string,
+  ): { reviews: Review[]; total: number } {
+    const total = (
+      this.db
+        .prepare("SELECT COUNT(*) as count FROM reviews WHERE business_id = ?")
+        .get(businessId) as { count: number }
+    ).count;
+
+    const rows = this.db
+      .prepare(
+        `
+      SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
+             r.rating, r.text, r.helpful_count, r.created_at
+      FROM reviews r
+      JOIN users u ON u.id = r.user_id
+      WHERE r.business_id = ?
+      ORDER BY r.helpful_count DESC, r.created_at DESC
+      LIMIT ? OFFSET ?
+    `,
+      )
+      .all(businessId, limit, offset) as any[];
+
+    const helpfulSet = new Set<number>();
+    if (requestingUserId && rows.length > 0) {
+      const ids = rows.map((r: any) => r.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const helpful = this.db
+        .prepare(
+          `SELECT review_id FROM review_helpful WHERE user_id = ? AND review_id IN (${placeholders})`,
+        )
+        .all(requestingUserId, ...ids) as { review_id: number }[];
+      helpful.forEach((h) => helpfulSet.add(h.review_id));
+    }
+
+    const reviews: Review[] = rows.map((row: any) => ({
+      id: row.id.toString(),
+      businessId: row.business_id,
+      userId: row.user_id.toString(),
+      userName: row.user_name,
+      userEmail: row.user_email,
+      rating: row.rating,
+      text: row.text,
+      helpfulCount: row.helpful_count,
+      userFoundHelpful: helpfulSet.has(row.id),
+      createdAt: row.created_at,
+    }));
+
+    return { reviews, total };
+  }
+
+  getUserReviewForBusiness(businessId: string, userId: string): Review | null {
+    const row = this.db
+      .prepare(
+        `
+      SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
+             r.rating, r.text, r.helpful_count, r.created_at
+      FROM reviews r
+      JOIN users u ON u.id = r.user_id
+      WHERE r.business_id = ? AND r.user_id = ?
+    `,
+      )
+      .get(businessId, userId) as any;
+    if (!row) return null;
+    return {
+      id: row.id.toString(),
+      businessId: row.business_id,
+      userId: row.user_id.toString(),
+      userName: row.user_name,
+      userEmail: row.user_email,
+      rating: row.rating,
+      text: row.text,
+      helpfulCount: row.helpful_count,
+      userFoundHelpful: false,
+      createdAt: row.created_at,
+    };
+  }
+
+  getProximitiReviewCount(businessId: string): number {
+    const result = this.db
+      .prepare("SELECT COUNT(*) as count FROM reviews WHERE business_id = ?")
+      .get(businessId) as { count: number };
+    return result.count;
+  }
+
+  /** Toggle helpful – returns new state (true = now helpful) */
+  toggleHelpful(reviewId: string, userId: string): boolean {
+    const existing = this.db
+      .prepare(
+        "SELECT 1 FROM review_helpful WHERE review_id = ? AND user_id = ?",
+      )
+      .get(reviewId, userId);
+
+    if (existing) {
+      this.db
+        .prepare(
+          "DELETE FROM review_helpful WHERE review_id = ? AND user_id = ?",
+        )
+        .run(reviewId, userId);
+      this.db
+        .prepare(
+          "UPDATE reviews SET helpful_count = helpful_count - 1 WHERE id = ?",
+        )
+        .run(reviewId);
+      return false;
+    } else {
+      this.db
+        .prepare(
+          "INSERT INTO review_helpful (review_id, user_id) VALUES (?, ?)",
+        )
+        .run(reviewId, userId);
+      this.db
+        .prepare(
+          "UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?",
+        )
+        .run(reviewId);
+      return true;
+    }
+  }
+
+  // ─── Session management ─────────────────────────────────────────────────────
 
   close(): void {
     this.db.close();
@@ -260,12 +510,16 @@ class DatabaseManager {
 }
 
 // Singleton instance
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '..', 'database.sqlite');
+const dbPath =
+  process.env.DATABASE_PATH || path.join(__dirname, "..", "database.sqlite");
 export const db = new DatabaseManager(dbPath);
 
 // Cleanup expired sessions every hour
-setInterval(() => {
-  db.cleanupExpiredSessions();
-}, 60 * 60 * 1000);
+setInterval(
+  () => {
+    db.cleanupExpiredSessions();
+  },
+  60 * 60 * 1000,
+);
 
 export default db;
