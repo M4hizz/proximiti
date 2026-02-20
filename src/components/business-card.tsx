@@ -29,11 +29,11 @@ export function BusinessCard({ business, isSelected, onClick }: BusinessCardProp
       }`}
     >
       <div className="flex gap-4">
-        {/* Business image */}
+        {/* Business image – curated Unsplash category image, no API call required */}
         <img
           src={business.image}
           alt={business.name}
-          className="w-24 h-24 object-cover rounded-lg flex-shrink-0"
+          className="w-24 h-24 object-cover rounded-lg shrink-0"
         />
 
         {/* Business info */}
@@ -50,27 +50,42 @@ export function BusinessCard({ business, isSelected, onClick }: BusinessCardProp
             </div>
           </div>
 
-          {/* Rating */}
-          <div className="flex items-center gap-1 mt-1">
-            <Star className="w-4 h-4 fill-green-500 dark:fill-green-400 text-green-500 dark:text-green-400" />
-            <span className="text-gray-900 dark:text-white font-medium text-sm">{business.rating}</span>
-            <span className="text-gray-500 dark:text-gray-400 text-sm">({business.reviewCount})</span>
+          {/* Rating row */}
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <div className="flex items-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star
+                  key={s}
+                  className={`w-3 h-3 ${
+                    s <= Math.round(business.rating)
+                      ? "fill-yellow-400 text-yellow-400"
+                      : "fill-gray-200 text-gray-200 dark:fill-gray-600 dark:text-gray-600"
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
+              {business.rating.toFixed(1)}
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              ({business.reviewCount.toLocaleString()})
+            </span>
           </div>
 
           {/* Category badge */}
-          <span className="inline-block mt-2 px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full capitalize">
+          <span className="inline-block mt-1.5 px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full capitalize">
             {business.category}
           </span>
 
           {/* Address */}
           <div className="flex items-center gap-1 mt-2 text-gray-500 dark:text-gray-400 text-sm">
-            <MapPin className="w-3 h-3 flex-shrink-0" />
+            <MapPin className="w-3 h-3 shrink-0" />
             <span className="truncate">{business.address.split(",")[0]}</span>
           </div>
 
           {/* Hours */}
           <div className="flex items-center gap-1 mt-1 text-gray-500 dark:text-gray-400 text-sm">
-            <Clock className="w-3 h-3 flex-shrink-0" />
+            <Clock className="w-3 h-3 shrink-0" />
             <span>{business.hours}</span>
           </div>
         </div>

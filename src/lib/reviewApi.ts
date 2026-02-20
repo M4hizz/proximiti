@@ -97,13 +97,14 @@ export async function fetchGoogleReviews(
   name: string,
   lat: number,
   lng: number,
-  pagetoken?: string,
+  options?: { placeId?: string; pagetoken?: string },
 ): Promise<GoogleReviewsResponse> {
   const params = new URLSearchParams({
     name,
     lat: lat.toString(),
     lng: lng.toString(),
   });
-  if (pagetoken) params.set("pagetoken", pagetoken);
+  if (options?.placeId) params.set("placeId", options.placeId);
+  if (options?.pagetoken) params.set("pagetoken", options.pagetoken);
   return request<GoogleReviewsResponse>(`/places/google-reviews?${params}`);
 }

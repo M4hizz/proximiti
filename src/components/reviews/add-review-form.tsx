@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Filter } from "bad-words";
 import { Button } from "@/components/ui/button";
 import { submitReview, type ProximitiReview } from "@/lib/reviewApi";
 import { useAuth } from "@/App";
+
+const profanityFilter = new Filter();
 
 interface AddReviewFormProps {
   businessId: string;
@@ -19,6 +22,16 @@ export function AddReviewForm({
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Real-time profanity detection — mirrors the server-side check
+  const hasProfanity = useMemo(() => {
+    if (!text.trim()) return false;
+    try {
+      return profanityFilter.isProfane(text);
+    } catch {
+      return false;
+    }
+  }, [text]);
 
   if (!isAuthenticated) {
     return (
@@ -43,6 +56,10 @@ export function AddReviewForm({
     }
     if (text.trim().length < 10) {
       setError("Review must be at least 10 characters.");
+      return;
+    }
+    if (hasProfanity) {
+      setError("Please remove inappropriate language before submitting.");
       return;
     }
 
@@ -121,7 +138,11 @@ export function AddReviewForm({
         placeholder="Share your experience with this business (min. 10 characters)…"
         rows={3}
         maxLength={1000}
-        className="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-sm p-3 resize-none focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 transition"
+        className={`w-full rounded-lg border bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-sm p-3 resize-none focus:outline-none focus:ring-2 transition ${
+          hasProfanity
+            ? "border-red-400 dark:border-red-500 focus:ring-red-400"
+            : "border-gray-200 dark:border-gray-600 focus:ring-green-500 dark:focus:ring-green-400"
+        }`}
       />
       <div className="flex items-center justify-between -mt-2">
         <span
@@ -129,6 +150,11 @@ export function AddReviewForm({
         >
           {text.length}/1000
         </span>
+        {hasProfanity && (
+          <span className="text-xs text-red-500 dark:text-red-400 font-medium">
+            ⚠ Inappropriate language detected
+          </span>
+        )}
       </div>
 
       {/* Error message */}
@@ -140,7 +166,7 @@ export function AddReviewForm({
 
       <Button
         type="submit"
-        disabled={submitting || rating === 0 || text.trim().length < 10}
+        disabled={submitting || rating === 0 || text.trim().length < 10 || hasProfanity}
         className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
       >
         {submitting ? "Submitting…" : "Submit Review"}

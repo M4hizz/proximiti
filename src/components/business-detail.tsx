@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Business } from "@/lib/businesses";
-import { Star, MapPin, Clock, Phone, X, Navigation, Bookmark } from "lucide-react";
+import { Star, MapPin, Clock, Phone, X, Navigation, Globe, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { isBookmarked, toggleBookmark } from "@/lib/bookmarks";
@@ -8,13 +8,14 @@ import { isBookmarked, toggleBookmark } from "@/lib/bookmarks";
 interface BusinessDetailProps {
   business: Business;
   onClose: () => void;
+  onGetDirections: () => void;
 }
 
 /**
  * Detailed view of a selected business.
  * Shows full information including description, contact, and actions.
  */
-export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
+export function BusinessDetail({ business, onClose, onGetDirections }: BusinessDetailProps) {
   const [isBookmarkedState, setIsBookmarkedState] = useState(() =>
     isBookmarked(business.id)
   );
@@ -27,10 +28,18 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
     toggleBookmark(business.id);
     setIsBookmarkedState(!isBookmarkedState);
   };
+
+  const [liveGoogleRating, setLiveGoogleRating] = useState<number | null>(null);
+  const [liveGoogleTotal, setLiveGoogleTotal] = useState<number | null>(null);
+
+  const handleGoogleData = (rating: number, totalRatings: number) => {
+    setLiveGoogleRating(rating);
+    setLiveGoogleTotal(totalRatings);
+  };
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none flex flex-col max-h-[calc(100vh-8rem)]">
-      {/* Header image */}
-      <div className="relative h-48">
+      {/* Header image – uses the curated Unsplash category image (no API key required) */}
+      <div className="relative h-48 bg-gray-200 dark:bg-gray-700">
         <img
           src={business.image}
           alt={business.name}
@@ -64,15 +73,49 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
 
         {/* Rating */}
         <div className="flex items-center gap-2 mt-2">
-          <div className="flex items-center gap-1">
-            <Star className="w-5 h-5 fill-green-500 dark:fill-green-400 text-green-500 dark:text-green-400" />
-            <span className="text-gray-900 dark:text-white font-semibold">
-              {business.rating}
-            </span>
-          </div>
-          <span className="text-gray-500 dark:text-gray-400">
-            ({business.reviewCount} reviews)
-          </span>
+          {liveGoogleRating !== null ? (
+            // Live Google rating
+            <>
+              <img
+                src="https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png"
+                alt="Google"
+                className="w-5 h-5 object-contain"
+              />
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={`w-4 h-4 ${
+                      s <= Math.round(liveGoogleRating)
+                        ? "fill-yellow-400 text-yellow-400"
+                        : "fill-gray-200 text-gray-200 dark:fill-gray-600 dark:text-gray-600"
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="text-gray-900 dark:text-white font-semibold">
+                {liveGoogleRating.toFixed(1)}
+              </span>
+              {liveGoogleTotal !== null && (
+                <span className="text-gray-500 dark:text-gray-400 text-sm">
+                  ({liveGoogleTotal.toLocaleString()} Google reviews)
+                </span>
+              )}
+            </>
+          ) : (
+            // Static fallback while Google data is loading
+            <>
+              <div className="flex items-center gap-1">
+                <Star className="w-5 h-5 fill-green-500 dark:fill-green-400 text-green-500 dark:text-green-400" />
+                <span className="text-gray-900 dark:text-white font-semibold">
+                  {business.rating}
+                </span>
+              </div>
+              <span className="text-gray-500 dark:text-gray-400">
+                ({business.reviewCount} reviews)
+              </span>
+            </>
+          )}
         </div>
 
         {/* Description */}
@@ -121,12 +164,7 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
         <div className="mt-6 flex gap-3">
           <Button
             className="flex-1 bg-cherry-rose hover:bg-green-600 text-white"
-            onClick={() => {
-              // Open Google Maps with directions from current location to business
-              const destination = `${business.lat},${business.lng}`;
-              const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
-              window.open(mapsUrl, "_blank");
-            }}
+            onClick={onGetDirections}
           >
             <Navigation className="w-4 h-4 mr-2" />
             Get Directions
@@ -147,11 +185,14 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
             variant="outline"
             className="flex-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
             onClick={() => {
-              window.location.href = `tel:${business.phone}`;
+              const url =
+                business.website ||
+                `https://www.google.com/search?q=${encodeURIComponent(business.name)}`;
+              window.open(url, "_blank", "noopener,noreferrer");
             }}
           >
-            <Phone className="w-4 h-4 mr-2" />
-            Call
+            <Globe className="w-4 h-4 mr-2" />
+            {business.website ? "Visit Website" : "Find Online"}
           </Button>
         </div>
 
@@ -163,6 +204,7 @@ export function BusinessDetail({ business, onClose }: BusinessDetailProps) {
             lat={business.lat}
             lng={business.lng}
             rating={business.rating}
+            onGoogleData={handleGoogleData}
           />
         </div>
       </div>

@@ -2,7 +2,26 @@ import { useState, useEffect, useCallback } from "react";
 import { StarRating } from "./star-rating";
 import { Button } from "@/components/ui/button";
 import { fetchGoogleReviews, type GoogleReview } from "@/lib/reviewApi";
-import { Loader2, MessageSquare, ExternalLink } from "lucide-react";
+import { Loader2, MessageSquare } from "lucide-react";
+
+// Palette of avatar bg/text colour pairs – deterministically chosen per reviewer name
+const AVATAR_COLOURS = [
+  "bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300",
+  "bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300",
+  "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300",
+  "bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300",
+  "bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300",
+  "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
+  "bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300",
+  "bg-pink-100 dark:bg-pink-900 text-pink-700 dark:text-pink-300",
+];
+
+function avatarColour(name: string): string {
+  const hash = name
+    .split("")
+    .reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0);
+  return AVATAR_COLOURS[hash % AVATAR_COLOURS.length];
+}
 
 interface GoogleReviewsTabProps {
   businessName: string;
@@ -10,10 +29,13 @@ interface GoogleReviewsTabProps {
   lng: number;
   /** Overall Google rating passed from business data */
   googleRating?: number;
+  /** Called once Google's live rating + review count are known */
+  onGoogleData?: (rating: number, totalRatings: number) => void;
 }
 
 const INITIAL_COUNT = 5;
 const LOAD_MORE_COUNT = 5;
+const COOLDOWN_MS = 3000;
 
 /** Formats a Unix timestamp to a human-readable date string. */
 function formatTimestamp(ts: number): string {
@@ -24,25 +46,29 @@ function formatTimestamp(ts: number): string {
   });
 }
 
-/** Tab that fetches and paginates Google Places reviews (via backend proxy). */
+/** Tab that fetches and paginates Google reviews (SerpAPI when configured, Places API as fallback). */
 export function GoogleReviewsTab({
   businessName,
   lat,
   lng,
   googleRating,
+  onGoogleData,
 }: GoogleReviewsTabProps) {
   const [reviews, setReviews] = useState<GoogleReview[]>([]);
-  const [displayCount, setDisplayCount] = useState(INITIAL_COUNT);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiConfigured, setApiConfigured] = useState(true);
   const [liveRating, setLiveRating] = useState<number | null>(
     googleRating ?? null,
   );
   const [totalRatings, setTotalRatings] = useState<number | null>(null);
+  const [displayCount, setDisplayCount] = useState(INITIAL_COUNT);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [hasMorePages, setHasMorePages] = useState(false);
+  // placeId is returned server-side and sent back on subsequent pagination requests
+  const [placeId, setPlaceId] = useState<string | null>(null);
 
   const loadGoogleReviews = useCallback(async () => {
     setLoading(true);
@@ -52,7 +78,13 @@ export function GoogleReviewsTab({
       setReviews(data.reviews);
       setNextPageToken(data.nextPageToken);
       setHasMorePages(data.nextPageToken !== null);
-      if (data.googleRating !== null) setLiveRating(data.googleRating);
+      if (data.placeId) setPlaceId(data.placeId);
+      if (data.googleRating !== null) {
+        setLiveRating(data.googleRating);
+        if (data.totalRatings !== null) {
+          onGoogleData?.(data.googleRating, data.totalRatings);
+        }
+      }
       if (data.totalRatings !== null) setTotalRatings(data.totalRatings);
     } catch (err: any) {
       if (err.message?.includes("not configured")) {
@@ -63,7 +95,7 @@ export function GoogleReviewsTab({
     } finally {
       setLoading(false);
     }
-  }, [businessName, lat, lng]);
+  }, [businessName, lat, lng]); // eslint-disable-line react-hooks/exhaustive-deps -- onGoogleData intentionally omitted to avoid re-runs
 
   const loadMoreGoogleReviews = useCallback(async () => {
     if (!nextPageToken) {
@@ -166,49 +198,31 @@ export function GoogleReviewsTab({
       )}
 
       {/* Reviews list */}
-      {displayedReviews.length === 0 ? (
+      {reviews.length === 0 ? (
         <div className="text-center py-8 text-gray-400 dark:text-gray-500">
           <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p className="text-sm">No Google reviews found for this business.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {displayedReviews.map((review, idx) => (
+          {reviews.map((review, idx) => (
             <div
               key={idx}
               className="bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 p-4 space-y-2"
             >
               {/* Author row */}
               <div className="flex items-start gap-3">
-                {review.profile_photo_url ? (
-                  <img
-                    src={review.profile_photo_url}
-                    alt={review.author_name}
-                    className="w-8 h-8 rounded-full object-cover shrink-0"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-xs font-semibold text-blue-700 dark:text-blue-300 shrink-0">
-                    {review.author_name.charAt(0).toUpperCase()}
-                  </div>
-                )}
+                {/* Coloured letter avatar – no external image request */}
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColour(review.author_name)}`}
+                >
+                  {review.author_name.charAt(0).toUpperCase()}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">
-                        {review.author_name}
-                      </span>
-                      {review.author_url && (
-                        <a
-                          href={review.author_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shrink-0"
-                          aria-label="View Google profile"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
+                    <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">
+                      {review.author_name}
+                    </span>
                     <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
                       {review.relative_time_description ||
                         formatTimestamp(review.time)}
@@ -238,22 +252,24 @@ export function GoogleReviewsTab({
         </div>
       )}
 
-      {/* Show more */}
-      {canShowMore && (
+      {/* Show more – only present when SerpAPI has a next page */}
+      {nextPageToken && (
         <Button
           variant="outline"
           onClick={handleShowMore}
-          disabled={loadingMore}
+          disabled={loadingMore || cooldown}
           className="w-full border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
         >
           {loadingMore ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading…
             </>
+          ) : cooldown ? (
+            "Please wait…"
           ) : hasMorePages ? (
             "Load More Reviews"
           ) : (
-            `Show More (${reviews.length - displayCount} remaining)`
+            "Show More Reviews"
           )}
         </Button>
       )}

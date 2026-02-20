@@ -11,6 +11,8 @@ interface ReviewsSectionProps {
   lng: number;
   /** Fallback star rating from business data */
   rating?: number;
+  /** Called once Google's live rating + total ratings count are known */
+  onGoogleData?: (rating: number, totalRatings: number) => void;
 }
 
 type Tab = "google" | "proximiti";
@@ -29,6 +31,7 @@ export function ReviewsSection({
   lat,
   lng,
   rating,
+  onGoogleData,
 }: ReviewsSectionProps) {
   const [activeTab, setActiveTab] = useState<Tab>("google");
   const [proximitiCount, setProximitiCount] = useState<number | null>(null);
@@ -107,6 +110,7 @@ export function ReviewsSection({
           lat={lat}
           lng={lng}
           googleRating={rating}
+          onGoogleData={onGoogleData}
         />
       )}
       {activeTab === "proximiti" && (

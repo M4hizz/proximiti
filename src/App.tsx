@@ -1,5 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
 import { LoginPage } from "@/pages/LoginPage";
 import { BusinessFinder } from "@/pages/BusinessFinder";
 import authApi, { type User } from "@/lib/authApi";
@@ -17,7 +23,7 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
 };
@@ -63,7 +69,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
@@ -88,10 +94,10 @@ function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(true);
       const response = await authApi.getCurrentUser();
       setUser(response.user);
-    } catch (error) {
+    } catch {
       // User is not logged in or token is invalid
       setUser(null);
-      console.log('No valid authentication found');
+      console.log("No valid authentication found");
     } finally {
       setIsLoading(false);
     }
@@ -105,7 +111,7 @@ function AuthProvider({ children }: AuthProviderProps) {
     try {
       await authApi.logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     } finally {
       setUser(null);
     }
@@ -116,7 +122,7 @@ function AuthProvider({ children }: AuthProviderProps) {
       const response = await authApi.getCurrentUser();
       setUser(response.user);
     } catch (error) {
-      console.error('Error refreshing user:', error);
+      console.error("Error refreshing user:", error);
       setUser(null);
     }
   };
@@ -127,13 +133,11 @@ function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticated,
     login,
     logout,
-    refreshUser
+    refreshUser,
   };
 
   return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
   );
 }
 
@@ -165,8 +169,22 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-            <Route path="/" element={<ProtectedRoute><BusinessFinder /></ProtectedRoute>} />
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <LoginPage />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <BusinessFinder />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
