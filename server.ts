@@ -470,21 +470,40 @@ app.get(
       }
 
       // Step 2: Get reviews from Place Details API
+      // Important: Google Places API requires significant delay before using next_page_token
+      // Free tier is heavily rate-limited (429 errors are common)
+      if (pagetoken) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+
       const detailsUrl = pagetoken
-        ? `https://maps.googleapis.com/maps/api/place/details/json?pagetoken=${pagetoken}&fields=reviews,rating,user_ratings_total&key=${apiKey}`
-        : `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=reviews,rating,user_ratings_total&key=${apiKey}`;
+        ? `https://maps.googleapis.com/maps/api/place/details/json?pagetoken=${pagetoken}&fields=reviews,rating,user_ratings_total,next_page_token&key=${apiKey}`
+        : `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=reviews,rating,user_ratings_total,next_page_token&key=${apiKey}`;
 
       const detailsResp = await fetch(detailsUrl, {
         signal: AbortSignal.timeout(30000),
       });
       const detailsData = (await detailsResp.json()) as any;
 
+      // Check for rate limit errors
+      if (detailsData.error_message?.includes("quota") || detailsData.error_message?.includes("rate")) {
+        console.warn("Google Places API rate limited:", detailsData.error_message);
+        return res.status(429).json({ error: "Rate limited. Please wait before loading more reviews." });
+      }
+
+      if (detailsData.status && detailsData.status !== "OK") {
+        console.warn("Google Places API error:", detailsData.status, detailsData.error_message);
+        return res.status(400).json({ error: `Google API error: ${detailsData.status}` });
+      }
+
+      const responseNextPageToken = detailsData.next_page_token ?? null;
+
       res.json({
         placeId,
         reviews: detailsData.result?.reviews ?? [],
         googleRating: detailsData.result?.rating ?? null,
         totalRatings: detailsData.result?.user_ratings_total ?? null,
-        nextPageToken: detailsData.next_page_token ?? null,
+        nextPageToken: responseNextPageToken,
       });
     } catch (error) {
       console.error("Google Places proxy error:", error);
