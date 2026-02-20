@@ -1,6 +1,15 @@
 import { useState, useEffect } from "react";
 import type { Business } from "@/lib/businesses";
-import { Star, MapPin, Clock, Phone, X, Navigation, Globe, Bookmark } from "lucide-react";
+import {
+  Star,
+  MapPin,
+  Clock,
+  Phone,
+  X,
+  Navigation,
+  Globe,
+  Bookmark,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { isBookmarked, toggleBookmark } from "@/lib/bookmarks";
@@ -15,9 +24,13 @@ interface BusinessDetailProps {
  * Detailed view of a selected business.
  * Shows full information including description, contact, and actions.
  */
-export function BusinessDetail({ business, onClose, onGetDirections }: BusinessDetailProps) {
+export function BusinessDetail({
+  business,
+  onClose,
+  onGetDirections,
+}: BusinessDetailProps) {
   const [isBookmarkedState, setIsBookmarkedState] = useState(() =>
-    isBookmarked(business.id)
+    isBookmarked(business.id),
   );
 
   useEffect(() => {
@@ -178,7 +191,9 @@ export function BusinessDetail({ business, onClose, onGetDirections }: BusinessD
             }`}
             onClick={handleToggleBookmark}
           >
-            <Bookmark className={`w-4 h-4 mr-2 ${isBookmarkedState ? "fill-current" : ""}`} />
+            <Bookmark
+              className={`w-4 h-4 mr-2 ${isBookmarkedState ? "fill-current" : ""}`}
+            />
             {isBookmarkedState ? "Bookmarked" : "Bookmark"}
           </Button>
           <Button

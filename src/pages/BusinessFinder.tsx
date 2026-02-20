@@ -170,8 +170,10 @@ export function BusinessFinder() {
         // When using search results, only apply category + bookmark filters
         if (searchResults !== null) {
           const matchesCategory =
-            selectedCategory === "all" || business.category === selectedCategory;
-          const matchesBookmark = !showBookmarkedOnly || bookmarkedIds.includes(business.id);
+            selectedCategory === "all" ||
+            business.category === selectedCategory;
+          const matchesBookmark =
+            !showBookmarkedOnly || bookmarkedIds.includes(business.id);
           return matchesCategory && matchesBookmark;
         }
         const matchesSearch =
@@ -182,7 +184,8 @@ export function BusinessFinder() {
             .includes(searchQuery.toLowerCase());
         const matchesCategory =
           selectedCategory === "all" || business.category === selectedCategory;
-        const matchesBookmark = !showBookmarkedOnly || bookmarkedIds.includes(business.id);
+        const matchesBookmark =
+          !showBookmarkedOnly || bookmarkedIds.includes(business.id);
         return matchesSearch && matchesCategory && matchesBookmark;
       },
     );
@@ -221,7 +224,15 @@ export function BusinessFinder() {
     }
 
     return filtered;
-  }, [availableBusinesses, searchResults, searchQuery, selectedCategory, userLocation, sortBy, showBookmarkedOnly]);
+  }, [
+    availableBusinesses,
+    searchResults,
+    searchQuery,
+    selectedCategory,
+    userLocation,
+    sortBy,
+    showBookmarkedOnly,
+  ]);
 
   // Handle user location detection and fetch nearby businesses
   const handleLocateUser = async () => {
@@ -356,8 +367,14 @@ export function BusinessFinder() {
           <div className="flex items-center justify-between mb-4">
             {/* Logo and title */}
             <div className="flex items-center gap-3">
-              <img src="/ProximitiImage.png" alt="Proximiti" className="w-10 h-10" />
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Proximiti</h1>
+              <img
+                src="/ProximitiImage.png"
+                alt="Proximiti"
+                className="w-10 h-10"
+              />
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Proximiti
+              </h1>
               <span className="text-gray-500 dark:text-gray-400 text-sm hidden sm:inline">
                 Discover local businesses
               </span>
@@ -502,11 +519,15 @@ export function BusinessFinder() {
                 <button
                   onClick={() => setShowBookmarkedOnly(!showBookmarkedOnly)}
                   className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${
-                    showBookmarkedOnly ? "bg-cherry-rose text-white" : "bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-white"
+                    showBookmarkedOnly
+                      ? "bg-cherry-rose text-white"
+                      : "bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-white"
                   }`}
                   title="Show bookmarked businesses only"
                 >
-                  <Bookmark className={`w-5 h-5 ${showBookmarkedOnly ? "fill-current" : ""}`} />
+                  <Bookmark
+                    className={`w-5 h-5 ${showBookmarkedOnly ? "fill-current" : ""}`}
+                  />
                 </button>
                 {/* Ask AI button */}
                 <button

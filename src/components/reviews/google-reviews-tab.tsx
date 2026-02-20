@@ -104,7 +104,12 @@ export function GoogleReviewsTab({
     setLoadingMore(true);
     setError(null);
     try {
-      const data = await fetchGoogleReviews(businessName, lat, lng, nextPageToken);
+      const data = await fetchGoogleReviews(
+        businessName,
+        lat,
+        lng,
+        nextPageToken,
+      );
       setReviews((prev) => [...prev, ...data.reviews]);
       setNextPageToken(data.nextPageToken);
       setHasMorePages(data.nextPageToken !== null);
@@ -131,7 +136,7 @@ export function GoogleReviewsTab({
   };
 
   const displayedReviews = reviews.slice(0, displayCount);
-  const canShowMore = hasMorePages || (displayCount < reviews.length);
+  const canShowMore = hasMorePages || displayCount < reviews.length;
 
   if (!apiConfigured) {
     return (
