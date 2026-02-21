@@ -12,10 +12,17 @@ dist
 dist-ssr
 *.local
 
-# Environment variables
+# Environment variables — NEVER commit these
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
+.env.production
+.env.staging
+
+# Patch files (may contain secrets from diffs)
+*.patch
 
 # Database
 *.sqlite
