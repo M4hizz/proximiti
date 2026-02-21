@@ -59,6 +59,7 @@ export function BusinessFinder() {
   const [sortBy, setSortBy] = useState<SortOption>("location");
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [showBookmarkedOnly, setShowBookmarkedOnly] = useState(false);
+  const [locationLabel, setLocationLabel] = useState<string>("");
   const [directionsTarget, setDirectionsTarget] = useState<Business | null>(
     null,
   );
@@ -245,6 +246,27 @@ export function BusinessFinder() {
           ];
           setUserLocation(coords);
 
+          // Reverse-geocode to get a human-readable label for the location input
+          fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`,
+            { headers: { "User-Agent": "Proximiti Business Finder" } },
+          )
+            .then((r) => r.json())
+            .then((geo) => {
+              const a = geo.address ?? {};
+              const label =
+                a.neighbourhood ||
+                a.suburb ||
+                a.quarter ||
+                a.village ||
+                a.town ||
+                a.city ||
+                a.county ||
+                "Current Location";
+              setLocationLabel(label);
+            })
+            .catch(() => setLocationLabel("Current Location"));
+
           // Fetch real nearby businesses from OpenStreetMap
           setIsLoadingBusinesses(true);
           try {
@@ -297,10 +319,13 @@ export function BusinessFinder() {
   const handleLocationSelect = async (
     lat: number,
     lng: number,
-    _displayName: string,
+    displayName: string,
   ) => {
     const coords: [number, number] = [lat, lng];
     setUserLocation(coords);
+    // Use the first 1–2 parts of the Nominatim display name as the label
+    const shortLabel = displayName.split(",").slice(0, 2).join(",").trim();
+    setLocationLabel(shortLabel);
 
     // Fetch nearby businesses for the selected location
     setIsLoadingBusinesses(true);
@@ -456,6 +481,7 @@ export function BusinessFinder() {
             onChange={setSearchQuery}
             onLocateUser={handleLocateUser}
             onLocationSelect={handleLocationSelect}
+            locationDisplay={locationLabel}
           />
 
           {/* Category filter */}

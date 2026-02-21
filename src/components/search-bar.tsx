@@ -6,6 +6,8 @@ interface SearchBarProps {
   onChange: (value: string) => void;
   onLocateUser: () => void;
   onLocationSelect?: (lat: number, lng: number, displayName: string) => void;
+  /** When set, populates the location input (e.g. after "Near Me" detects a location) */
+  locationDisplay?: string;
 }
 
 interface LocationSuggestion {
@@ -31,13 +33,24 @@ export function SearchBar({
   onChange,
   onLocateUser,
   onLocationSelect,
+  locationDisplay,
 }: SearchBarProps) {
-  const [locationQuery, setLocationQuery] = useState("");
+  const [locationQuery, setLocationQuery] = useState(locationDisplay ?? "");
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [isLocationFocused, setIsLocationFocused] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const locationInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync the location input whenever the parent pushes a new display label
+  // (e.g. after "Near Me" resolves or a location is selected) but NOT while the
+  // user is actively typing in the field.
+  useEffect(() => {
+    if (locationDisplay !== undefined && locationDisplay !== "" && !isLocationFocused) {
+      setLocationQuery(locationDisplay);
+    }
+  }, [locationDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -267,11 +280,13 @@ export function SearchBar({
           type="text"
           value={locationQuery}
           onChange={(e) => setLocationQuery(e.target.value)}
-          onFocus={() =>
+          onFocus={() => {
+            setIsLocationFocused(true);
             locationQuery.length >= 3 &&
-            suggestions.length > 0 &&
-            setShowDropdown(true)
-          }
+              suggestions.length > 0 &&
+              setShowDropdown(true);
+          }}
+          onBlur={() => setIsLocationFocused(false)}
           placeholder="Enter location..."
           className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl pl-12 pr-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
         />
