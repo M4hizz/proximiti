@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
+import { DealsSection } from "@/components/deals-section";
 import { isBookmarked, toggleBookmark } from "@/lib/bookmarks";
 
 interface BusinessDetailProps {
@@ -184,7 +185,7 @@ export function BusinessDetail({
           </Button>
           <Button
             variant="outline"
-            className={`flex-1 transition-colors ${
+            className={`flex-1 min-w-[140px] transition-colors ${
               isBookmarkedState
                 ? "border-cherry-rose text-cherry-rose dark:border-cherry-rose dark:text-cherry-rose hover:bg-cherry-rose hover:text-white"
                 : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -209,6 +210,11 @@ export function BusinessDetail({
             <Globe className="w-4 h-4 mr-2" />
             {business.website ? "Visit Website" : "Find Online"}
           </Button>
+        </div>
+
+        {/* Deals section */}
+        <div className="mt-6 border-t border-gray-100 dark:border-gray-700 pt-5">
+          <DealsSection businessId={business.id} />
         </div>
 
         {/* Reviews section */}

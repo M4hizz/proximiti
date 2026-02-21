@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import type { Business } from "@/lib/businesses";
-import { Star, MapPin, Clock, Bookmark } from "lucide-react";
+import { Star, MapPin, Clock, Bookmark, Tag } from "lucide-react";
 import { isBookmarked } from "@/lib/bookmarks";
+import { getBusinessCouponCount } from "@/lib/couponApi";
 
 interface BusinessCardProps {
   business: Business;
@@ -19,9 +20,17 @@ export function BusinessCard({
   onClick,
 }: BusinessCardProps) {
   const [bookmarked, setBookmarked] = useState(() => isBookmarked(business.id));
+  const [couponCount, setCouponCount] = useState<number>(0);
 
   useEffect(() => {
     setBookmarked(isBookmarked(business.id));
+  }, [business.id]);
+
+  useEffect(() => {
+    // Fetch coupon count for this business
+    getBusinessCouponCount(business.id)
+      .then(setCouponCount)
+      .catch(() => setCouponCount(0));
   }, [business.id]);
   return (
     <button
@@ -47,8 +56,18 @@ export function BusinessCard({
               {business.name}
             </h3>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {bookmarked && (
-                <Bookmark className="w-5 h-5 fill-cherry-rose text-cherry-rose" />
+              <Bookmark 
+                className={`w-5 h-5 ${
+                  bookmarked 
+                    ? "fill-cherry-rose text-cherry-rose" 
+                    : "opacity-0"
+                }`} 
+              />
+              {couponCount > 0 && (
+                <span className="px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold rounded-md flex items-center gap-1 whitespace-nowrap">
+                  <Tag className="w-3.5 h-3.5" />
+                  {couponCount} {couponCount === 1 ? "Deal" : "Deals"}
+                </span>
               )}
               <span className="text-green-600 dark:text-green-400 font-medium text-sm">
                 {business.priceLevel}

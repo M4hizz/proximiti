@@ -31,6 +31,24 @@ export interface Review {
   createdAt: string;
 }
 
+export interface Coupon {
+  id: string;
+  businessId: string;
+  title: string;
+  description: string;
+  discountType: "percentage" | "fixed";
+  discountValue: number;
+  couponCode: string;
+  startDate: string;
+  endDate: string;
+  usageLimit: number | null;
+  usageCount: number;
+  isActive: boolean;
+  isPremiumOnly: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DatabaseUser extends Omit<User, "id"> {
   id: number;
 }
@@ -113,6 +131,37 @@ class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
       CREATE INDEX IF NOT EXISTS idx_reviews_business ON reviews(business_id);
       CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
+    `);
+
+    // Create coupons table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS coupons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        discount_type TEXT NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+        discount_value REAL NOT NULL CHECK (discount_value > 0),
+        coupon_code TEXT NOT NULL UNIQUE,
+        start_date DATETIME NOT NULL,
+        end_date DATETIME NOT NULL,
+        usage_limit INTEGER,
+        usage_count INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT 1,
+        is_premium_only BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        CHECK (end_date > start_date),
+        CHECK (usage_limit IS NULL OR usage_count <= usage_limit)
+      )
+    `);
+
+    // Create indexes for coupons
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(coupon_code);
+      CREATE INDEX IF NOT EXISTS idx_coupons_business ON coupons(business_id);
+      CREATE INDEX IF NOT EXISTS idx_coupons_end_date ON coupons(end_date);
+      CREATE INDEX IF NOT EXISTS idx_coupons_active ON coupons(is_active);
     `);
 
     // Photo cache: stores resolved Google Places photo URLs keyed by business
@@ -538,6 +587,310 @@ class DatabaseManager {
     return row?.photo_url ?? null;
   }
 
+  // ─── Coupon Methods ──────────────────────────────────────────────────────────
+
+  createCoupon(couponData: {
+    businessId: string;
+    title: string;
+    description: string;
+    discountType: "percentage" | "fixed";
+    discountValue: number;
+    couponCode: string;
+    startDate: Date;
+    endDate: Date;
+    usageLimit?: number;
+    isPremiumOnly?: boolean;
+  }): Coupon {
+    const {
+      businessId,
+      title,
+      description,
+      discountType,
+      discountValue,
+      couponCode,
+      startDate,
+      endDate,
+      usageLimit,
+      isPremiumOnly,
+    } = couponData;
+
+    // Validate dates
+    if (endDate <= startDate) {
+      throw new Error("End date must be after start date");
+    }
+
+    // Validate discount value
+    if (discountValue <= 0) {
+      throw new Error("Discount value must be positive");
+    }
+
+    if (discountType === "percentage" && discountValue > 100) {
+      throw new Error("Percentage discount cannot exceed 100%");
+    }
+
+    const stmt = this.db.prepare(`
+      INSERT INTO coupons (
+        business_id, title, description, discount_type, discount_value,
+        coupon_code, start_date, end_date, usage_limit, is_premium_only
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    try {
+      const result = stmt.run(
+        businessId,
+        title,
+        description,
+        discountType,
+        discountValue,
+        couponCode.toUpperCase(),
+        startDate.toISOString(),
+        endDate.toISOString(),
+        usageLimit ?? null,
+        isPremiumOnly ? 1 : 0,
+      );
+      return this.getCouponById(result.lastInsertRowid as number);
+    } catch (error: any) {
+      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+        throw new Error("Coupon code already exists");
+      }
+      throw error;
+    }
+  }
+
+  getCouponById(id: number): Coupon {
+    const stmt = this.db.prepare(`
+      SELECT id, business_id as businessId, title, description,
+             discount_type as discountType, discount_value as discountValue,
+             coupon_code as couponCode, start_date as startDate,
+             end_date as endDate, usage_limit as usageLimit,
+             usage_count as usageCount, is_active as isActive,
+             is_premium_only as isPremiumOnly,
+             created_at as createdAt, updated_at as updatedAt
+      FROM coupons WHERE id = ?
+    `);
+    const coupon = stmt.get(id) as any;
+    if (!coupon) {
+      throw new Error("Coupon not found");
+    }
+    return {
+      ...coupon,
+      id: coupon.id.toString(),
+      isActive: Boolean(coupon.isActive),
+      isPremiumOnly: Boolean(coupon.isPremiumOnly),
+    };
+  }
+
+  getCouponByCode(couponCode: string): Coupon | null {
+    const stmt = this.db.prepare(`
+      SELECT id, business_id as businessId, title, description,
+             discount_type as discountType, discount_value as discountValue,
+             coupon_code as couponCode, start_date as startDate,
+             end_date as endDate, usage_limit as usageLimit,
+             usage_count as usageCount, is_active as isActive,
+             is_premium_only as isPremiumOnly,
+             created_at as createdAt, updated_at as updatedAt
+      FROM coupons WHERE coupon_code = ?
+    `);
+    const coupon = stmt.get(couponCode.toUpperCase()) as any;
+    if (!coupon) return null;
+    return {
+      ...coupon,
+      id: coupon.id.toString(),
+      isActive: Boolean(coupon.isActive),
+      isPremiumOnly: Boolean(coupon.isPremiumOnly),
+    };
+  }
+
+  getActiveCouponsForBusiness(businessId: string): Coupon[] {
+    const stmt = this.db.prepare(`
+      SELECT id, business_id as businessId, title, description,
+             discount_type as discountType, discount_value as discountValue,
+             coupon_code as couponCode, start_date as startDate,
+             end_date as endDate, usage_limit as usageLimit,
+             usage_count as usageCount, is_active as isActive,
+             is_premium_only as isPremiumOnly,
+             created_at as createdAt, updated_at as updatedAt
+      FROM coupons 
+      WHERE business_id = ? 
+        AND is_active = 1
+        AND datetime(start_date) <= datetime('now')
+        AND datetime(end_date) >= datetime('now')
+      ORDER BY end_date ASC
+    `);
+    const coupons = stmt.all(businessId) as any[];
+    return coupons.map((c) => ({
+      ...c,
+      id: c.id.toString(),
+      isActive: Boolean(c.isActive),
+      isPremiumOnly: Boolean(c.isPremiumOnly),
+    }));
+  }
+
+  getAllCouponsForBusiness(businessId: string): Coupon[] {
+    const stmt = this.db.prepare(`
+      SELECT id, business_id as businessId, title, description,
+             discount_type as discountType, discount_value as discountValue,
+             coupon_code as couponCode, start_date as startDate,
+             end_date as endDate, usage_limit as usageLimit,
+             usage_count as usageCount, is_active as isActive,
+             is_premium_only as isPremiumOnly,
+             created_at as createdAt, updated_at as updatedAt
+      FROM coupons 
+      WHERE business_id = ?
+      ORDER BY created_at DESC
+    `);
+    const coupons = stmt.all(businessId) as any[];
+    return coupons.map((c) => ({
+      ...c,
+      id: c.id.toString(),
+      isActive: Boolean(c.isActive),
+      isPremiumOnly: Boolean(c.isPremiumOnly),
+    }));
+  }
+
+  getAllCoupons(): Coupon[] {
+    const stmt = this.db.prepare(`
+      SELECT id, business_id as businessId, title, description,
+             discount_type as discountType, discount_value as discountValue,
+             coupon_code as couponCode, start_date as startDate,
+             end_date as endDate, usage_limit as usageLimit,
+             usage_count as usageCount, is_active as isActive,
+             is_premium_only as isPremiumOnly,
+             created_at as createdAt, updated_at as updatedAt
+      FROM coupons 
+      ORDER BY created_at DESC
+    `);
+    const coupons = stmt.all() as any[];
+    return coupons.map((c) => ({
+      ...c,
+      id: c.id.toString(),
+      isActive: Boolean(c.isActive),
+      isPremiumOnly: Boolean(c.isPremiumOnly),
+    }));
+  }
+
+  updateCoupon(
+    id: string,
+    updates: Partial<
+      Omit<Coupon, "id" | "couponCode" | "usageCount" | "createdAt" | "updatedAt">
+    >,
+  ): Coupon {
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value !== undefined) {
+        // Convert camelCase to snake_case
+        const dbKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
+        
+        // Handle date conversions
+        if (key === "startDate" || key === "endDate") {
+          fields.push(`${dbKey} = ?`);
+          values.push(new Date(value as string).toISOString());
+        } else {
+          fields.push(`${dbKey} = ?`);
+          values.push(value);
+        }
+      }
+    });
+
+    if (fields.length === 0) {
+      throw new Error("No valid fields to update");
+    }
+
+    fields.push("updated_at = CURRENT_TIMESTAMP");
+    values.push(id);
+
+    const stmt = this.db.prepare(`
+      UPDATE coupons SET ${fields.join(", ")} WHERE id = ?
+    `);
+
+    stmt.run(...values);
+    return this.getCouponById(parseInt(id));
+  }
+
+  deleteCoupon(id: string): boolean {
+    const stmt = this.db.prepare("DELETE FROM coupons WHERE id = ?");
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  redeemCoupon(couponCode: string): {
+    success: boolean;
+    coupon?: Coupon;
+    error?: string;
+  } {
+    const coupon = this.getCouponByCode(couponCode);
+
+    if (!coupon) {
+      return { success: false, error: "Coupon not found" };
+    }
+
+    if (!coupon.isActive) {
+      return { success: false, error: "Coupon is not active" };
+    }
+
+    const now = new Date();
+    const startDate = new Date(coupon.startDate);
+    const endDate = new Date(coupon.endDate);
+
+    if (now < startDate) {
+      return { success: false, error: "Coupon is not yet valid" };
+    }
+
+    if (now > endDate) {
+      return { success: false, error: "Coupon has expired" };
+    }
+
+    if (
+      coupon.usageLimit !== null &&
+      coupon.usageCount >= coupon.usageLimit
+    ) {
+      return { success: false, error: "Coupon usage limit reached" };
+    }
+
+    // Increment usage count
+    const stmt = this.db.prepare(`
+      UPDATE coupons 
+      SET usage_count = usage_count + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    stmt.run(coupon.id);
+
+    // Get updated coupon
+    const updatedCoupon = this.getCouponById(parseInt(coupon.id));
+
+    return { success: true, coupon: updatedCoupon };
+  }
+
+  // Get count of active coupons for a business (for badge display)
+  getActiveCouponCount(businessId: string): number {
+    const stmt = this.db.prepare(`
+      SELECT COUNT(*) as count
+      FROM coupons 
+      WHERE business_id = ? 
+        AND is_active = 1
+        AND datetime(start_date) <= datetime('now')
+        AND datetime(end_date) >= datetime('now')
+    `);
+    const result = stmt.get(businessId) as { count: number };
+    return result.count;
+  }
+
+  // Auto-expire coupons (for cron job)
+  expireOldCoupons(): number {
+    const stmt = this.db.prepare(`
+      UPDATE coupons 
+      SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE is_active = 1 AND datetime(end_date) < datetime('now')
+    `);
+    const result = stmt.run();
+    if (result.changes > 0) {
+      console.log(`Auto-expired ${result.changes} coupons`);
+    }
+    return result.changes;
+  }
+
   // ─── Session management ─────────────────────────────────────────────────────
 
   close(): void {
@@ -554,6 +907,14 @@ export const db = new DatabaseManager(dbPath);
 setInterval(
   () => {
     db.cleanupExpiredSessions();
+  },
+  60 * 60 * 1000,
+);
+
+// Auto-expire coupons every hour
+setInterval(
+  () => {
+    db.expireOldCoupons();
   },
   60 * 60 * 1000,
 );

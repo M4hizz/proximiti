@@ -3,7 +3,8 @@ import { useAuth } from '@/App';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import authApi, { type User } from '@/lib/authApi';
-import { Users, Shield, AlertCircle, CheckCircle } from 'lucide-react';
+import { Users, Shield, AlertCircle, CheckCircle, Tag } from 'lucide-react';
+import { CouponManagement } from '@/components/coupon-management';
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showCouponManagement, setShowCouponManagement] = useState(false);
 
   useEffect(() => {
     if (isOpen && user?.role === 'admin') {
@@ -163,6 +165,23 @@ export function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
             )}
           </div>
 
+          <div className="border-t border-gray-700 pt-6 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Tag className="w-5 h-5 text-green-400" />
+              <h3 className="text-lg font-semibold text-white">Coupon Management</h3>
+            </div>
+            <p className="text-gray-400 text-sm mb-4">
+              Create and manage promotional coupons for businesses.
+            </p>
+            <Button
+              onClick={() => setShowCouponManagement(true)}
+              className="bg-cherry-rose hover:bg-green-600 text-white"
+            >
+              <Tag className="w-4 h-4 mr-2" />
+              Manage Coupons
+            </Button>
+          </div>
+
           <div className="border-t border-gray-700 pt-6">
             <h3 className="text-lg font-semibold text-white mb-3">Security Status</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -197,6 +216,12 @@ export function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
           </div>
         </div>
       </Card>
+
+      {/* Coupon Management Modal */}
+      <CouponManagement
+        isOpen={showCouponManagement}
+        onClose={() => setShowCouponManagement(false)}
+      />
     </div>
   );
 }
