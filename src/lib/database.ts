@@ -31,6 +31,42 @@ export interface Review {
   createdAt: string;
 }
 
+export type RideshareStatus =
+  | "waiting"
+  | "accepted"
+  | "in_transit"
+  | "completed"
+  | "cancelled";
+
+export interface Rideshare {
+  id: string;
+  creatorId: string;
+  creatorName: string;
+  driverId: string | null;
+  driverName: string | null;
+  originName: string;
+  originLat: number;
+  originLng: number;
+  destinationName: string;
+  destinationLat: number;
+  destinationLng: number;
+  maxPassengers: number;
+  currentPassengers: number;
+  status: RideshareStatus;
+  note: string | null;
+  shareCode: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RidesharePassenger {
+  id: string;
+  rideshareId: string;
+  userId: string;
+  userName: string;
+  joinedAt: string;
+}
+
 export interface Coupon {
   id: string;
   businessId: string;
@@ -171,6 +207,57 @@ class DatabaseManager {
         photo_url TEXT NOT NULL,
         cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+
+    // Create rideshares table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS rideshares (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        creator_id INTEGER NOT NULL,
+        driver_id INTEGER,
+        origin_name TEXT NOT NULL,
+        origin_lat REAL NOT NULL,
+        origin_lng REAL NOT NULL,
+        destination_name TEXT NOT NULL,
+        destination_lat REAL NOT NULL,
+        destination_lng REAL NOT NULL,
+        max_passengers INTEGER NOT NULL DEFAULT 4 CHECK (max_passengers >= 1 AND max_passengers <= 4),
+        status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'accepted', 'in_transit', 'completed', 'cancelled')),
+        note TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (creator_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (driver_id) REFERENCES users (id) ON DELETE SET NULL
+      )
+    `);
+
+    // Create rideshare_passengers table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS rideshare_passengers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rideshare_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rideshare_id) REFERENCES rideshares (id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        UNIQUE (rideshare_id, user_id)
+      )
+    `);
+
+    // Add share_code column (migration for existing DBs)
+    try {
+      this.db.exec(`ALTER TABLE rideshares ADD COLUMN share_code TEXT UNIQUE`);
+    } catch {
+      // Column already exists — ignore
+    }
+
+    // Create indexes for rideshares
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_rideshares_status ON rideshares(status);
+      CREATE INDEX IF NOT EXISTS idx_rideshares_creator ON rideshares(creator_id);
+      CREATE INDEX IF NOT EXISTS idx_rideshares_share_code ON rideshares(share_code);
+      CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_rideshare ON rideshare_passengers(rideshare_id);
+      CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_user ON rideshare_passengers(user_id);
     `);
 
     // Create the first admin user if no users exist
@@ -772,7 +859,10 @@ class DatabaseManager {
   updateCoupon(
     id: string,
     updates: Partial<
-      Omit<Coupon, "id" | "couponCode" | "usageCount" | "createdAt" | "updatedAt">
+      Omit<
+        Coupon,
+        "id" | "couponCode" | "usageCount" | "createdAt" | "updatedAt"
+      >
     >,
   ): Coupon {
     const fields: string[] = [];
@@ -782,7 +872,7 @@ class DatabaseManager {
       if (value !== undefined) {
         // Convert camelCase to snake_case
         const dbKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
-        
+
         // Handle date conversions
         if (key === "startDate" || key === "endDate") {
           fields.push(`${dbKey} = ?`);
@@ -842,10 +932,7 @@ class DatabaseManager {
       return { success: false, error: "Coupon has expired" };
     }
 
-    if (
-      coupon.usageLimit !== null &&
-      coupon.usageCount >= coupon.usageLimit
-    ) {
+    if (coupon.usageLimit !== null && coupon.usageCount >= coupon.usageLimit) {
       return { success: false, error: "Coupon usage limit reached" };
     }
 
@@ -891,6 +978,442 @@ class DatabaseManager {
     return result.changes;
   }
 
+  // ─── Rideshare Methods ───────────────────────────────────────────────────────
+
+  createRideshare(data: {
+    creatorId: string;
+    originName: string;
+    originLat: number;
+    originLng: number;
+    destinationName: string;
+    destinationLat: number;
+    destinationLng: number;
+    maxPassengers: number;
+    note?: string;
+  }): Rideshare {
+    const {
+      creatorId,
+      originName,
+      originLat,
+      originLng,
+      destinationName,
+      destinationLat,
+      destinationLng,
+      maxPassengers,
+      note,
+    } = data;
+
+    if (maxPassengers < 1 || maxPassengers > 4) {
+      throw new Error("Max passengers must be between 1 and 4");
+    }
+
+    // Generate a unique 6-char share code
+    const generateCode = (): string => {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I,O,0,1 to avoid confusion
+      let code = "";
+      for (let i = 0; i < 6; i++)
+        code += chars[Math.floor(Math.random() * chars.length)];
+      return code;
+    };
+    let shareCode = generateCode();
+    // Ensure uniqueness (extremely unlikely collision but just in case)
+    while (
+      this.db
+        .prepare("SELECT 1 FROM rideshares WHERE share_code = ?")
+        .get(shareCode)
+    ) {
+      shareCode = generateCode();
+    }
+
+    const stmt = this.db.prepare(`
+      INSERT INTO rideshares (
+        creator_id, origin_name, origin_lat, origin_lng,
+        destination_name, destination_lat, destination_lng,
+        max_passengers, note, share_code
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      creatorId,
+      originName,
+      originLat,
+      originLng,
+      destinationName,
+      destinationLat,
+      destinationLng,
+      maxPassengers,
+      note ?? null,
+      shareCode,
+    );
+
+    // Creator is also the first passenger
+    this.db
+      .prepare(
+        "INSERT INTO rideshare_passengers (rideshare_id, user_id) VALUES (?, ?)",
+      )
+      .run(result.lastInsertRowid, creatorId);
+
+    return this.getRideshareById(result.lastInsertRowid as number);
+  }
+
+  getRideshareById(id: number): Rideshare {
+    const row = this.db
+      .prepare(
+        `
+      SELECT r.*, u1.name as creator_name, u2.name as driver_name,
+        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+      FROM rideshares r
+      JOIN users u1 ON u1.id = r.creator_id
+      LEFT JOIN users u2 ON u2.id = r.driver_id
+      WHERE r.id = ?
+    `,
+      )
+      .get(id) as any;
+
+    if (!row) throw new Error("Rideshare not found");
+    return this.mapRideshareRow(row);
+  }
+
+  getRideshareByShareCode(code: string): Rideshare | null {
+    const row = this.db
+      .prepare(
+        `
+      SELECT r.*, u1.name as creator_name, u2.name as driver_name,
+        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+      FROM rideshares r
+      JOIN users u1 ON u1.id = r.creator_id
+      LEFT JOIN users u2 ON u2.id = r.driver_id
+      WHERE r.share_code = ?
+    `,
+      )
+      .get(code.toUpperCase()) as any;
+
+    if (!row) return null;
+    return this.mapRideshareRow(row);
+  }
+
+  private mapRideshareRow(row: any): Rideshare {
+    return {
+      id: row.id.toString(),
+      creatorId: row.creator_id.toString(),
+      creatorName: row.creator_name,
+      driverId: row.driver_id?.toString() ?? null,
+      driverName: row.driver_name ?? null,
+      originName: row.origin_name,
+      originLat: row.origin_lat,
+      originLng: row.origin_lng,
+      destinationName: row.destination_name,
+      destinationLat: row.destination_lat,
+      destinationLng: row.destination_lng,
+      maxPassengers: row.max_passengers,
+      currentPassengers: row.current_passengers,
+      status: row.status as RideshareStatus,
+      note: row.note,
+      shareCode: row.share_code ?? "",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  getActiveRideshares(): Rideshare[] {
+    const rows = this.db
+      .prepare(
+        `
+      SELECT r.*, u1.name as creator_name, u2.name as driver_name,
+        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+      FROM rideshares r
+      JOIN users u1 ON u1.id = r.creator_id
+      LEFT JOIN users u2 ON u2.id = r.driver_id
+      WHERE r.status IN ('waiting', 'accepted')
+      ORDER BY r.created_at DESC
+    `,
+      )
+      .all() as any[];
+
+    return rows.map((row: any) => this.mapRideshareRow(row));
+  }
+
+  getAllRideshares(includeCompleted: boolean = false): Rideshare[] {
+    const statusFilter = includeCompleted
+      ? ""
+      : "WHERE r.status NOT IN ('completed', 'cancelled')";
+
+    const rows = this.db
+      .prepare(
+        `
+      SELECT r.*, u1.name as creator_name, u2.name as driver_name,
+        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+      FROM rideshares r
+      JOIN users u1 ON u1.id = r.creator_id
+      LEFT JOIN users u2 ON u2.id = r.driver_id
+      ${statusFilter}
+      ORDER BY r.created_at DESC
+    `,
+      )
+      .all() as any[];
+
+    return rows.map((row: any) => this.mapRideshareRow(row));
+  }
+
+  getUserRideshares(userId: string): Rideshare[] {
+    const rows = this.db
+      .prepare(
+        `
+      SELECT DISTINCT r.*, u1.name as creator_name, u2.name as driver_name,
+        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+      FROM rideshares r
+      JOIN users u1 ON u1.id = r.creator_id
+      LEFT JOIN users u2 ON u2.id = r.driver_id
+      LEFT JOIN rideshare_passengers rp ON rp.rideshare_id = r.id
+      WHERE r.creator_id = ? OR r.driver_id = ? OR rp.user_id = ?
+      ORDER BY r.created_at DESC
+    `,
+      )
+      .all(userId, userId, userId) as any[];
+
+    return rows.map((row: any) => this.mapRideshareRow(row));
+  }
+
+  getRidesharePassengers(rideshareId: string): RidesharePassenger[] {
+    const rows = this.db
+      .prepare(
+        `
+      SELECT rp.id, rp.rideshare_id, rp.user_id, u.name as user_name, rp.joined_at
+      FROM rideshare_passengers rp
+      JOIN users u ON u.id = rp.user_id
+      WHERE rp.rideshare_id = ?
+      ORDER BY rp.joined_at ASC
+    `,
+      )
+      .all(rideshareId) as any[];
+
+    return rows.map((row: any) => ({
+      id: row.id.toString(),
+      rideshareId: row.rideshare_id.toString(),
+      userId: row.user_id.toString(),
+      userName: row.user_name,
+      joinedAt: row.joined_at,
+    }));
+  }
+
+  joinRideshare(
+    rideshareId: string,
+    userId: string,
+  ): { success: boolean; error?: string } {
+    const rideshare = this.getRideshareById(parseInt(rideshareId));
+
+    if (!rideshare) {
+      return { success: false, error: "Rideshare not found" };
+    }
+
+    if (rideshare.status === "in_transit") {
+      return {
+        success: false,
+        error: "This ride is already in transit — lobby is closed",
+      };
+    }
+
+    if (rideshare.status === "completed" || rideshare.status === "cancelled") {
+      return { success: false, error: "This ride is no longer active" };
+    }
+
+    if (rideshare.currentPassengers >= rideshare.maxPassengers) {
+      return { success: false, error: "This ride is full" };
+    }
+
+    // Check if already joined
+    const existing = this.db
+      .prepare(
+        "SELECT 1 FROM rideshare_passengers WHERE rideshare_id = ? AND user_id = ?",
+      )
+      .get(rideshareId, userId);
+
+    if (existing) {
+      return { success: false, error: "You already joined this ride" };
+    }
+
+    try {
+      this.db
+        .prepare(
+          "INSERT INTO rideshare_passengers (rideshare_id, user_id) VALUES (?, ?)",
+        )
+        .run(rideshareId, userId);
+
+      this.db
+        .prepare(
+          "UPDATE rideshares SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        )
+        .run(rideshareId);
+
+      return { success: true };
+    } catch (error: any) {
+      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+        return { success: false, error: "You already joined this ride" };
+      }
+      throw error;
+    }
+  }
+
+  leaveRideshare(
+    rideshareId: string,
+    userId: string,
+  ): { success: boolean; error?: string } {
+    const rideshare = this.getRideshareById(parseInt(rideshareId));
+
+    if (rideshare.status === "in_transit") {
+      return {
+        success: false,
+        error: "Cannot leave a ride that is in transit",
+      };
+    }
+
+    if (rideshare.creatorId === userId) {
+      return {
+        success: false,
+        error: "The creator cannot leave — cancel the ride instead",
+      };
+    }
+
+    const result = this.db
+      .prepare(
+        "DELETE FROM rideshare_passengers WHERE rideshare_id = ? AND user_id = ?",
+      )
+      .run(rideshareId, userId);
+
+    if (result.changes === 0) {
+      return { success: false, error: "You are not in this ride" };
+    }
+
+    this.db
+      .prepare(
+        "UPDATE rideshares SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
+      .run(rideshareId);
+
+    return { success: true };
+  }
+
+  acceptTransport(
+    rideshareId: string,
+    driverId: string,
+  ): { success: boolean; error?: string } {
+    const rideshare = this.getRideshareById(parseInt(rideshareId));
+
+    if (rideshare.status !== "waiting") {
+      return {
+        success: false,
+        error: "This ride already has a driver or is no longer waiting",
+      };
+    }
+
+    if (rideshare.creatorId === driverId) {
+      return { success: false, error: "The creator cannot also be the driver" };
+    }
+
+    this.db
+      .prepare(
+        "UPDATE rideshares SET driver_id = ?, status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
+      .run(driverId, rideshareId);
+
+    return { success: true };
+  }
+
+  startTransport(
+    rideshareId: string,
+    driverId: string,
+  ): { success: boolean; error?: string } {
+    const rideshare = this.getRideshareById(parseInt(rideshareId));
+
+    if (rideshare.driverId !== driverId) {
+      return {
+        success: false,
+        error: "Only the assigned driver can start the transport",
+      };
+    }
+
+    if (rideshare.status !== "accepted") {
+      return {
+        success: false,
+        error: "Transport must be accepted before starting",
+      };
+    }
+
+    this.db
+      .prepare(
+        "UPDATE rideshares SET status = 'in_transit', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
+      .run(rideshareId);
+
+    return { success: true };
+  }
+
+  completeRideshare(
+    rideshareId: string,
+    userId: string,
+  ): { success: boolean; error?: string } {
+    const rideshare = this.getRideshareById(parseInt(rideshareId));
+
+    if (rideshare.driverId !== userId && rideshare.creatorId !== userId) {
+      return {
+        success: false,
+        error: "Only the driver or creator can complete the ride",
+      };
+    }
+
+    if (rideshare.status !== "in_transit") {
+      return {
+        success: false,
+        error: "Can only complete a ride that is in transit",
+      };
+    }
+
+    this.db
+      .prepare(
+        "UPDATE rideshares SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
+      .run(rideshareId);
+
+    return { success: true };
+  }
+
+  cancelRideshare(
+    rideshareId: string,
+    userId: string,
+  ): { success: boolean; error?: string } {
+    const rideshare = this.getRideshareById(parseInt(rideshareId));
+
+    if (rideshare.creatorId !== userId && rideshare.driverId !== userId) {
+      return { success: false, error: "Only the creator or driver can cancel" };
+    }
+
+    if (rideshare.status === "completed") {
+      return { success: false, error: "Cannot cancel a completed ride" };
+    }
+
+    this.db
+      .prepare(
+        "UPDATE rideshares SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
+      .run(rideshareId);
+
+    return { success: true };
+  }
+
+  // Clean up old completed/cancelled rideshares (older than 24 hours)
+  cleanupOldRideshares(): number {
+    const stmt = this.db.prepare(`
+      DELETE FROM rideshares
+      WHERE status IN ('completed', 'cancelled')
+        AND datetime(updated_at) < datetime('now', '-24 hours')
+    `);
+    const result = stmt.run();
+    if (result.changes > 0) {
+      console.log(`Cleaned up ${result.changes} old rideshares`);
+    }
+    return result.changes;
+  }
+
   // ─── Session management ─────────────────────────────────────────────────────
 
   close(): void {
@@ -915,6 +1438,14 @@ setInterval(
 setInterval(
   () => {
     db.expireOldCoupons();
+  },
+  60 * 60 * 1000,
+);
+
+// Cleanup old rideshares every hour
+setInterval(
+  () => {
+    db.cleanupOldRideshares();
   },
   60 * 60 * 1000,
 );
