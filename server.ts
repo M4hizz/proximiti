@@ -93,7 +93,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Global rate limiting
-const globalRateLimit = createRateLimiter(15 * 60 * 1000, 100); // 100 requests per 15 minutes
+const globalRateLimit = createRateLimiter(15 * 60 * 1000, 500); // 500 requests per 15 minutes
 app.use(globalRateLimit);
 
 // Extract token from cookies/headers for all routes
@@ -1237,7 +1237,7 @@ app.get(
 
 // ─── AI Search API ───────────────────────────────────────────────────────────
 
-const aiSearchRateLimit = createRateLimiter(60 * 1000, 10); // 10 requests/minute
+const aiSearchRateLimit = createRateLimiter(60 * 1000, 30); // 30 requests/minute
 
 app.post(
   "/api/ai-search",
@@ -1777,6 +1777,316 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
         : "Something went wrong",
   });
 });
+
+// ─── Coupons API ─────────────────────────────────────────────────────────────
+
+// Get active coupons for a business (public)
+app.get(
+  "/api/businesses/:id/coupons",
+  (req: Request, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const coupons = db.getActiveCouponsForBusiness(id);
+      res.json({ coupons });
+    } catch (error) {
+      console.error("Error fetching coupons:", error);
+      res.status(500).json({ error: "Failed to fetch coupons" });
+    }
+  },
+);
+
+// Get active coupon count for a business (for badges)
+app.get(
+  "/api/businesses/:id/coupons/count",
+  (req: Request, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const count = db.getActiveCouponCount(id);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching coupon count:", error);
+      res.status(500).json({ error: "Failed to fetch coupon count" });
+    }
+  },
+);
+
+// Redeem a coupon (public)
+app.post(
+  "/api/coupons/redeem",
+  (req: Request, res: Response) => {
+    try {
+      const { couponCode } = req.body;
+
+      if (!couponCode || typeof couponCode !== "string") {
+        return res.status(400).json({ error: "Coupon code is required" });
+      }
+
+      const result = db.redeemCoupon(couponCode.trim());
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      res.json({
+        message: "Coupon redeemed successfully",
+        coupon: result.coupon,
+      });
+    } catch (error) {
+      console.error("Error redeeming coupon:", error);
+      res.status(500).json({ error: "Failed to redeem coupon" });
+    }
+  },
+);
+
+// ─── Admin Coupon Routes ──────────────────────────────────────────────────────
+
+// Get all coupons (admin only)
+app.get(
+  "/api/admin/coupons",
+  authenticate,
+  requireAdmin,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { businessId } = req.query;
+
+      let coupons;
+      if (businessId) {
+        coupons = db.getAllCouponsForBusiness(businessId as string);
+      } else {
+        coupons = db.getAllCoupons();
+      }
+
+      res.json({ coupons });
+    } catch (error) {
+      console.error("Error fetching admin coupons:", error);
+      res.status(500).json({ error: "Failed to fetch coupons" });
+    }
+  },
+);
+
+// Create a new coupon (admin only)
+app.post(
+  "/api/businesses/:id/coupons",
+  authenticate,
+  requireAdmin,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id: businessId } = req.params as { id: string };
+      const {
+        title,
+        description,
+        discountType,
+        discountValue,
+        couponCode,
+        startDate,
+        endDate,
+        usageLimit,
+        isPremiumOnly,
+      } = req.body;
+
+      // Validation
+      if (!title || typeof title !== "string" || title.trim().length === 0) {
+        return res.status(400).json({ error: "Title is required" });
+      }
+      if (
+        !description ||
+        typeof description !== "string" ||
+        description.trim().length === 0
+      ) {
+        return res.status(400).json({ error: "Description is required" });
+      }
+      if (!["percentage", "fixed"].includes(discountType)) {
+        return res
+          .status(400)
+          .json({ error: 'Discount type must be "percentage" or "fixed"' });
+      }
+      if (
+        !discountValue ||
+        typeof discountValue !== "number" ||
+        discountValue <= 0
+      ) {
+        return res.status(400).json({ error: "Discount value must be positive" });
+      }
+      if (
+        !couponCode ||
+        typeof couponCode !== "string" ||
+        couponCode.trim().length === 0
+      ) {
+        return res.status(400).json({ error: "Coupon code is required" });
+      }
+      if (!startDate || !endDate) {
+        return res
+          .status(400)
+          .json({ error: "Start date and end date are required" });
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({ error: "Invalid date format" });
+      }
+      if (end <= start) {
+        return res
+          .status(400)
+          .json({ error: "End date must be after start date" });
+      }
+      if (
+        usageLimit !== undefined &&
+        usageLimit !== null &&
+        (typeof usageLimit !== "number" || usageLimit <= 0)
+      ) {
+        return res
+          .status(400)
+          .json({ error: "Usage limit must be a positive number" });
+      }
+
+      const coupon = db.createCoupon({
+        businessId,
+        title: title.trim(),
+        description: description.trim(),
+        discountType,
+        discountValue,
+        couponCode: couponCode.trim(),
+        startDate: start,
+        endDate: end,
+        usageLimit: usageLimit || undefined,
+        isPremiumOnly: isPremiumOnly || false,
+      });
+
+      res.status(201).json({
+        message: "Coupon created successfully",
+        coupon,
+      });
+    } catch (error: any) {
+      if (error.message?.includes("already exists")) {
+        return res.status(409).json({ error: error.message });
+      }
+      console.error("Error creating coupon:", error);
+      res.status(500).json({ error: "Failed to create coupon" });
+    }
+  },
+);
+
+// Update a coupon (admin only)
+app.put(
+  "/api/coupons/:couponId",
+  authenticate,
+  requireAdmin,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { couponId } = req.params as { couponId: string };
+      const {
+        title,
+        description,
+        discountType,
+        discountValue,
+        startDate,
+        endDate,
+        usageLimit,
+        isActive,
+      } = req.body;
+
+      const updates: any = {};
+
+      if (title !== undefined) {
+        if (typeof title !== "string" || title.trim().length === 0) {
+          return res.status(400).json({ error: "Invalid title" });
+        }
+        updates.title = title.trim();
+      }
+      if (description !== undefined) {
+        if (typeof description !== "string" || description.trim().length === 0) {
+          return res.status(400).json({ error: "Invalid description" });
+        }
+        updates.description = description.trim();
+      }
+      if (discountType !== undefined) {
+        if (!["percentage", "fixed"].includes(discountType)) {
+          return res
+            .status(400)
+            .json({ error: 'Discount type must be "percentage" or "fixed"' });
+        }
+        updates.discountType = discountType;
+      }
+      if (discountValue !== undefined) {
+        if (typeof discountValue !== "number" || discountValue <= 0) {
+          return res
+            .status(400)
+            .json({ error: "Discount value must be positive" });
+        }
+        updates.discountValue = discountValue;
+      }
+      if (startDate !== undefined) {
+        const start = new Date(startDate);
+        if (isNaN(start.getTime())) {
+          return res.status(400).json({ error: "Invalid start date" });
+        }
+        updates.startDate = start.toISOString();
+      }
+      if (endDate !== undefined) {
+        const end = new Date(endDate);
+        if (isNaN(end.getTime())) {
+          return res.status(400).json({ error: "Invalid end date" });
+        }
+        updates.endDate = end.toISOString();
+      }
+      if (usageLimit !== undefined) {
+        if (usageLimit !== null && (typeof usageLimit !== "number" || usageLimit <= 0)) {
+          return res
+            .status(400)
+            .json({ error: "Usage limit must be a positive number or null" });
+        }
+        updates.usageLimit = usageLimit;
+      }
+      if (isActive !== undefined) {
+        if (typeof isActive !== "boolean") {
+          return res.status(400).json({ error: "isActive must be a boolean" });
+        }
+        updates.isActive = isActive;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
+
+      const coupon = db.updateCoupon(couponId, updates);
+
+      res.json({
+        message: "Coupon updated successfully",
+        coupon,
+      });
+    } catch (error: any) {
+      if (error.message?.includes("not found")) {
+        return res.status(404).json({ error: "Coupon not found" });
+      }
+      console.error("Error updating coupon:", error);
+      res.status(500).json({ error: "Failed to update coupon" });
+    }
+  },
+);
+
+// Delete a coupon (admin only)
+app.delete(
+  "/api/coupons/:couponId",
+  authenticate,
+  requireAdmin,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { couponId } = req.params as { couponId: string };
+      const success = db.deleteCoupon(couponId);
+
+      if (!success) {
+        return res.status(404).json({ error: "Coupon not found" });
+      }
+
+      res.json({ message: "Coupon deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting coupon:", error);
+      res.status(500).json({ error: "Failed to delete coupon" });
+    }
+  },
+);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

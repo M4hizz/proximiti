@@ -12,7 +12,7 @@ const googleClient = new OAuth2Client(
 );
 
 // Rate limiting for auth endpoints
-const authRateLimit = createRateLimiter(15 * 60 * 1000, 10); // 10 requests per 15 minutes
+const authRateLimit = createRateLimiter(15 * 60 * 1000, 50); // 50 requests per 15 minutes
 
 interface GoogleTokenData {
   email: string;
