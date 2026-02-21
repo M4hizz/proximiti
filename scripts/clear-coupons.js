@@ -10,8 +10,11 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = path.join(__dirname, "..", "src", "database.sqlite");
+// Use the same database path as the server (matches database.ts)
+const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), "database.sqlite");
 const db = new Database(dbPath);
+
+console.log(`Using database: ${dbPath}`);
 
 console.log("🗑️  Clearing all coupons...\n");
 
