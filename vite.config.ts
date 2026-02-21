@@ -12,7 +12,7 @@ export default defineConfig({
   },
   server: {
     // Allow ngrok / any external host to reach the Vite dev server
-    allowedHosts: "all",
+    allowedHosts: true,
     // Proxy /api/* → backend so a single ngrok tunnel covers both frontend + API
     proxy: {
       "/api": {
