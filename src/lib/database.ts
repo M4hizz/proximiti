@@ -245,8 +245,10 @@ class DatabaseManager {
     `);
 
     // Add share_code column (migration for existing DBs)
+    // Note: SQLite ALTER TABLE cannot add columns with UNIQUE constraint;
+    // uniqueness is enforced via the UNIQUE INDEX created below instead.
     try {
-      this.db.exec(`ALTER TABLE rideshares ADD COLUMN share_code TEXT UNIQUE`);
+      this.db.exec(`ALTER TABLE rideshares ADD COLUMN share_code TEXT`);
     } catch {
       // Column already exists — ignore
     }
@@ -255,7 +257,7 @@ class DatabaseManager {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_rideshares_status ON rideshares(status);
       CREATE INDEX IF NOT EXISTS idx_rideshares_creator ON rideshares(creator_id);
-      CREATE INDEX IF NOT EXISTS idx_rideshares_share_code ON rideshares(share_code);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_rideshares_share_code ON rideshares(share_code);
       CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_rideshare ON rideshare_passengers(rideshare_id);
       CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_user ON rideshare_passengers(user_id);
     `);
@@ -1422,8 +1424,10 @@ class DatabaseManager {
 }
 
 // Singleton instance
+// Use process.cwd() as fallback so the DB always lands at the project root
+// regardless of __dirname (which varies based on how tsx resolves the file).
 const dbPath =
-  process.env.DATABASE_PATH || path.join(__dirname, "..", "database.sqlite");
+  process.env.DATABASE_PATH || path.join(process.cwd(), "database.sqlite");
 export const db = new DatabaseManager(dbPath);
 
 // Cleanup expired sessions every hour
