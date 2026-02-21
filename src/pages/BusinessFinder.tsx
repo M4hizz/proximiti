@@ -8,6 +8,7 @@ import { SearchBar } from "@/components/search-bar";
 import { CategoryFilter } from "@/components/category-filter";
 import { AdminPanel } from "@/components/admin-panel";
 import { AskAIPanel, type AIResult } from "@/components/ask-ai-panel";
+import { RidesharePanel } from "@/components/rideshare-panel";
 import { businesses, calculateDistance } from "@/lib/businesses";
 import { fetchNearbyBusinesses, searchBusinesses } from "@/lib/api";
 import { getBookmarkedIds } from "@/lib/bookmarks";
@@ -23,6 +24,7 @@ import {
   Moon,
   Bookmark,
   Sparkles,
+  Car,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -64,6 +66,7 @@ export function BusinessFinder() {
     null,
   );
   const [showAIPanel, setShowAIPanel] = useState(false);
+  const [showRidesharePanel, setShowRidesharePanel] = useState(false);
   const [searchResults, setSearchResults] = useState<Business[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
@@ -482,6 +485,7 @@ export function BusinessFinder() {
             onLocateUser={handleLocateUser}
             onLocationSelect={handleLocationSelect}
             locationDisplay={locationLabel}
+            userLocation={userLocation}
           />
 
           {/* Category filter */}
@@ -563,6 +567,16 @@ export function BusinessFinder() {
                 >
                   <Sparkles className="w-4 h-4" />
                   <span className="hidden sm:inline">Ask AI</span>
+                </button>
+
+                {/* Rideshare button */}
+                <button
+                  onClick={() => setShowRidesharePanel(true)}
+                  className="flex items-center gap-1.5 px-3 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-800/60 text-green-700 dark:text-green-300 text-sm font-medium transition-colors"
+                  title="Rideshare Lobby"
+                >
+                  <Car className="w-4 h-4" />
+                  <span className="hidden sm:inline">Rideshare</span>
                 </button>
 
                 {/* Sort dropdown */}
@@ -662,6 +676,13 @@ export function BusinessFinder() {
         onClose={() => setShowAIPanel(false)}
         userLocation={userLocation}
         onSelectResult={handleAIResult}
+      />
+
+      {/* Rideshare Panel */}
+      <RidesharePanel
+        isOpen={showRidesharePanel}
+        onClose={() => setShowRidesharePanel(false)}
+        userLocation={userLocation}
       />
     </div>
   );

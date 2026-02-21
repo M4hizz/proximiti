@@ -599,11 +599,9 @@ app.get(
           "Google Places API rate limited:",
           detailsData.error_message,
         );
-        return res
-          .status(429)
-          .json({
-            error: "Rate limited. Please wait before loading more reviews.",
-          });
+        return res.status(429).json({
+          error: "Rate limited. Please wait before loading more reviews.",
+        });
       }
 
       if (detailsData.status && detailsData.status !== "OK") {
@@ -926,6 +924,126 @@ app.get(
       res
         .status(500)
         .json({ error: "Failed to fetch nearby places", businesses: [] });
+    }
+  },
+);
+
+// ─── OSM Text Search (free Overpass-based) ─────────────────────────────────
+// Searches for named POIs matching a query near a location.
+// Works entirely free — no API key needed.
+app.get(
+  "/api/osm/search",
+  optionalAuthenticate,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        query: q,
+        lat,
+        lng,
+        radius = "10000",
+      } = req.query as Record<string, string>;
+      if (!q || !lat || !lng)
+        return res
+          .status(400)
+          .json({ error: "query, lat and lng are required", results: [] });
+
+      const r = Math.min(parseFloat(radius), 50000); // cap at 50 km
+      // Search by name (case-insensitive regex) with amenity or shop tag
+      const overpassQuery = `
+[out:json][timeout:20];
+(
+  node["name"~"${q.replace(/"/g, "")}", i]["amenity"](around:${r},${lat},${lng});
+  node["name"~"${q.replace(/"/g, "")}", i]["shop"](around:${r},${lat},${lng});
+  node["name"~"${q.replace(/"/g, "")}", i]["tourism"](around:${r},${lat},${lng});
+  node["name"~"${q.replace(/"/g, "")}", i]["leisure"](around:${r},${lat},${lng});
+  way["name"~"${q.replace(/"/g, "")}", i]["amenity"](around:${r},${lat},${lng});
+  way["name"~"${q.replace(/"/g, "")}", i]["shop"](around:${r},${lat},${lng});
+);
+out center body 30;
+`;
+
+      const OVERPASS_ENDPOINTS = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.openstreetmap.ru/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+      ];
+
+      let osmData: any = null;
+      for (const endpoint of OVERPASS_ENDPOINTS) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 8000);
+          const osmRes = await fetch(endpoint, {
+            method: "POST",
+            body: overpassQuery,
+            headers: { "Content-Type": "text/plain" },
+            signal: controller.signal,
+          }).finally(() => clearTimeout(timer));
+          if (osmRes.ok) {
+            osmData = await osmRes.json();
+            break;
+          }
+        } catch {
+          // try next
+        }
+      }
+
+      if (!osmData) return res.json({ results: [] });
+
+      const userLat = parseFloat(lat);
+      const userLng = parseFloat(lng);
+
+      // Haversine helper
+      function haversine(
+        la1: number,
+        lo1: number,
+        la2: number,
+        lo2: number,
+      ): number {
+        const R = 6371;
+        const dLat = ((la2 - la1) * Math.PI) / 180;
+        const dLon = ((lo2 - lo1) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((la1 * Math.PI) / 180) *
+            Math.cos((la2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      const results = (osmData.elements ?? [])
+        .filter(
+          (el: any) =>
+            el.tags?.name && (el.lat != null || el.center?.lat != null),
+        )
+        .map((el: any) => {
+          const elLat = el.lat ?? el.center?.lat ?? 0;
+          const elLng = el.lon ?? el.center?.lon ?? 0;
+          const tags = el.tags ?? {};
+          const addr = [tags["addr:housenumber"], tags["addr:street"]]
+            .filter(Boolean)
+            .join(" ");
+          const city = tags["addr:city"] || tags["addr:suburb"] || "";
+          return {
+            name: tags.name,
+            lat: elLat,
+            lng: elLng,
+            address: addr ? `${addr}${city ? ", " + city : ""}` : city || "",
+            type:
+              tags.amenity || tags.shop || tags.tourism || tags.leisure || "",
+            phone: tags.phone || tags["contact:phone"] || "",
+            website: tags.website || tags["contact:website"] || "",
+            distance: haversine(userLat, userLng, elLat, elLng),
+          };
+        })
+        .sort((a: any, b: any) => a.distance - b.distance)
+        .slice(0, 20);
+
+      res.json({ results });
+    } catch (error) {
+      console.error("OSM text search error:", error);
+      res.status(500).json({ error: "Search failed", results: [] });
     }
   },
 );
@@ -1781,62 +1899,53 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
 // ─── Coupons API ─────────────────────────────────────────────────────────────
 
 // Get active coupons for a business (public)
-app.get(
-  "/api/businesses/:id/coupons",
-  (req: Request, res: Response) => {
-    try {
-      const { id } = req.params as { id: string };
-      const coupons = db.getActiveCouponsForBusiness(id);
-      res.json({ coupons });
-    } catch (error) {
-      console.error("Error fetching coupons:", error);
-      res.status(500).json({ error: "Failed to fetch coupons" });
-    }
-  },
-);
+app.get("/api/businesses/:id/coupons", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const coupons = db.getActiveCouponsForBusiness(id);
+    res.json({ coupons });
+  } catch (error) {
+    console.error("Error fetching coupons:", error);
+    res.status(500).json({ error: "Failed to fetch coupons" });
+  }
+});
 
 // Get active coupon count for a business (for badges)
-app.get(
-  "/api/businesses/:id/coupons/count",
-  (req: Request, res: Response) => {
-    try {
-      const { id } = req.params as { id: string };
-      const count = db.getActiveCouponCount(id);
-      res.json({ count });
-    } catch (error) {
-      console.error("Error fetching coupon count:", error);
-      res.status(500).json({ error: "Failed to fetch coupon count" });
-    }
-  },
-);
+app.get("/api/businesses/:id/coupons/count", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const count = db.getActiveCouponCount(id);
+    res.json({ count });
+  } catch (error) {
+    console.error("Error fetching coupon count:", error);
+    res.status(500).json({ error: "Failed to fetch coupon count" });
+  }
+});
 
 // Redeem a coupon (public)
-app.post(
-  "/api/coupons/redeem",
-  (req: Request, res: Response) => {
-    try {
-      const { couponCode } = req.body;
+app.post("/api/coupons/redeem", (req: Request, res: Response) => {
+  try {
+    const { couponCode } = req.body;
 
-      if (!couponCode || typeof couponCode !== "string") {
-        return res.status(400).json({ error: "Coupon code is required" });
-      }
-
-      const result = db.redeemCoupon(couponCode.trim());
-
-      if (!result.success) {
-        return res.status(400).json({ error: result.error });
-      }
-
-      res.json({
-        message: "Coupon redeemed successfully",
-        coupon: result.coupon,
-      });
-    } catch (error) {
-      console.error("Error redeeming coupon:", error);
-      res.status(500).json({ error: "Failed to redeem coupon" });
+    if (!couponCode || typeof couponCode !== "string") {
+      return res.status(400).json({ error: "Coupon code is required" });
     }
-  },
-);
+
+    const result = db.redeemCoupon(couponCode.trim());
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({
+      message: "Coupon redeemed successfully",
+      coupon: result.coupon,
+    });
+  } catch (error) {
+    console.error("Error redeeming coupon:", error);
+    res.status(500).json({ error: "Failed to redeem coupon" });
+  }
+});
 
 // ─── Admin Coupon Routes ──────────────────────────────────────────────────────
 
@@ -1905,7 +2014,9 @@ app.post(
         typeof discountValue !== "number" ||
         discountValue <= 0
       ) {
-        return res.status(400).json({ error: "Discount value must be positive" });
+        return res
+          .status(400)
+          .json({ error: "Discount value must be positive" });
       }
       if (
         !couponCode ||
@@ -1996,7 +2107,10 @@ app.put(
         updates.title = title.trim();
       }
       if (description !== undefined) {
-        if (typeof description !== "string" || description.trim().length === 0) {
+        if (
+          typeof description !== "string" ||
+          description.trim().length === 0
+        ) {
           return res.status(400).json({ error: "Invalid description" });
         }
         updates.description = description.trim();
@@ -2032,7 +2146,10 @@ app.put(
         updates.endDate = end.toISOString();
       }
       if (usageLimit !== undefined) {
-        if (usageLimit !== null && (typeof usageLimit !== "number" || usageLimit <= 0)) {
+        if (
+          usageLimit !== null &&
+          (typeof usageLimit !== "number" || usageLimit <= 0)
+        ) {
           return res
             .status(400)
             .json({ error: "Usage limit must be a positive number or null" });
@@ -2084,6 +2201,276 @@ app.delete(
     } catch (error) {
       console.error("Error deleting coupon:", error);
       res.status(500).json({ error: "Failed to delete coupon" });
+    }
+  },
+);
+
+// ─── Rideshare API ─────────────────────────────────────────────────────────
+
+// Get all active rideshares (any authenticated user)
+app.get(
+  "/api/rideshares",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const includeAll = req.query.all === "true";
+      const mine = req.query.mine === "true";
+
+      let rideshares;
+      if (mine) {
+        rideshares = db.getUserRideshares(req.user!.id);
+      } else if (includeAll) {
+        rideshares = db.getAllRideshares(true);
+      } else {
+        rideshares = db.getActiveRideshares();
+      }
+
+      res.json({ rideshares });
+    } catch (error) {
+      console.error("Error fetching rideshares:", error);
+      res.status(500).json({ error: "Failed to fetch rideshares" });
+    }
+  },
+);
+
+// Look up a rideshare by its share code (e.g. "Join by Code")
+app.get(
+  "/api/rideshares/code/:code",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const code = (req.params.code as string).toUpperCase().trim();
+      if (!code || code.length !== 6) {
+        return res
+          .status(400)
+          .json({ error: "Share code must be 6 characters" });
+      }
+
+      const rideshare = db.getRideshareByShareCode(code);
+      if (!rideshare) {
+        return res
+          .status(404)
+          .json({ error: "No rideshare found with that code" });
+      }
+
+      const passengers = db.getRidesharePassengers(rideshare.id);
+      res.json({ rideshare, passengers });
+    } catch (error) {
+      console.error("Error looking up rideshare by code:", error);
+      res.status(500).json({ error: "Failed to look up rideshare" });
+    }
+  },
+);
+
+// Get a specific rideshare with passengers
+app.get(
+  "/api/rideshares/:id",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const rideshare = db.getRideshareById(id);
+      const passengers = db.getRidesharePassengers(rideshare.id);
+
+      res.json({ rideshare, passengers });
+    } catch (error: any) {
+      if (error.message?.includes("not found")) {
+        return res.status(404).json({ error: "Rideshare not found" });
+      }
+      console.error("Error fetching rideshare:", error);
+      res.status(500).json({ error: "Failed to fetch rideshare" });
+    }
+  },
+);
+
+// Create a new rideshare
+app.post(
+  "/api/rideshares",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const {
+        originName,
+        originLat,
+        originLng,
+        destinationName,
+        destinationLat,
+        destinationLng,
+        maxPassengers,
+        note,
+      } = req.body;
+
+      // Validate required fields
+      if (!originName || originLat == null || originLng == null) {
+        return res
+          .status(400)
+          .json({ error: "Origin is required (name, lat, lng)" });
+      }
+      if (
+        !destinationName ||
+        destinationLat == null ||
+        destinationLng == null
+      ) {
+        return res
+          .status(400)
+          .json({ error: "Destination is required (name, lat, lng)" });
+      }
+
+      const max = parseInt(maxPassengers) || 4;
+      if (max < 1 || max > 4) {
+        return res
+          .status(400)
+          .json({ error: "Max passengers must be between 1 and 4" });
+      }
+
+      const rideshare = db.createRideshare({
+        creatorId: req.user!.id,
+        originName,
+        originLat: parseFloat(originLat),
+        originLng: parseFloat(originLng),
+        destinationName,
+        destinationLat: parseFloat(destinationLat),
+        destinationLng: parseFloat(destinationLng),
+        maxPassengers: max,
+        note: note || undefined,
+      });
+
+      res.status(201).json({ message: "Rideshare created", rideshare });
+    } catch (error) {
+      console.error("Error creating rideshare:", error);
+      res.status(500).json({ error: "Failed to create rideshare" });
+    }
+  },
+);
+
+// Join a rideshare as passenger
+app.post(
+  "/api/rideshares/:id/join",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const result = db.joinRideshare(id, req.user!.id);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      const rideshare = db.getRideshareById(parseInt(id));
+      const passengers = db.getRidesharePassengers(id);
+      res.json({ message: "Joined rideshare", rideshare, passengers });
+    } catch (error) {
+      console.error("Error joining rideshare:", error);
+      res.status(500).json({ error: "Failed to join rideshare" });
+    }
+  },
+);
+
+// Leave a rideshare
+app.post(
+  "/api/rideshares/:id/leave",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const result = db.leaveRideshare(id, req.user!.id);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      res.json({ message: "Left rideshare" });
+    } catch (error) {
+      console.error("Error leaving rideshare:", error);
+      res.status(500).json({ error: "Failed to leave rideshare" });
+    }
+  },
+);
+
+// Accept transport (become the driver)
+app.post(
+  "/api/rideshares/:id/accept-transport",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const result = db.acceptTransport(id, req.user!.id);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      const rideshare = db.getRideshareById(parseInt(id));
+      res.json({ message: "Transport accepted", rideshare });
+    } catch (error) {
+      console.error("Error accepting transport:", error);
+      res.status(500).json({ error: "Failed to accept transport" });
+    }
+  },
+);
+
+// Start transport ("Passengers in Transport" — locks the lobby)
+app.post(
+  "/api/rideshares/:id/start",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const result = db.startTransport(id, req.user!.id);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      const rideshare = db.getRideshareById(parseInt(id));
+      res.json({ message: "Transport started — lobby locked", rideshare });
+    } catch (error) {
+      console.error("Error starting transport:", error);
+      res.status(500).json({ error: "Failed to start transport" });
+    }
+  },
+);
+
+// Complete the ride
+app.post(
+  "/api/rideshares/:id/complete",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const result = db.completeRideshare(id, req.user!.id);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      const rideshare = db.getRideshareById(parseInt(id));
+      res.json({ message: "Ride completed", rideshare });
+    } catch (error) {
+      console.error("Error completing rideshare:", error);
+      res.status(500).json({ error: "Failed to complete rideshare" });
+    }
+  },
+);
+
+// Cancel a rideshare
+app.post(
+  "/api/rideshares/:id/cancel",
+  authenticate,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const result = db.cancelRideshare(id, req.user!.id);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      const rideshare = db.getRideshareById(parseInt(id));
+      res.json({ message: "Ride cancelled", rideshare });
+    } catch (error) {
+      console.error("Error cancelling rideshare:", error);
+      res.status(500).json({ error: "Failed to cancel rideshare" });
     }
   },
 );

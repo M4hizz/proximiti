@@ -7,6 +7,7 @@
     "dev": "vite",
     "server": "tsx server.ts",
     "dev:all": "concurrently -n \"vite,server\" -c \"cyan,green\" \"vite\" \"tsx server.ts\"",
+    "share": "powershell -ExecutionPolicy Bypass -File share.ps1",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
