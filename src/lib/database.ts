@@ -14,6 +14,7 @@ export interface User {
   role: "user" | "admin";
   hashedPassword?: string; // For non-Google users
   isVerified: boolean;
+  isPremium: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -253,6 +254,13 @@ class DatabaseManager {
       // Column already exists — ignore
     }
 
+    // Add is_premium column to users (migration for existing DBs)
+    try {
+      this.db.exec(`ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0`);
+    } catch {
+      // Column already exists — ignore
+    }
+
     // Create indexes for rideshares
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_rideshares_status ON rideshares(status);
@@ -349,6 +357,7 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       SELECT id, email, name, google_id as googleId, role, 
              hashed_password as hashedPassword, is_verified as isVerified,
+             is_premium as isPremium,
              created_at as createdAt, updated_at as updatedAt
       FROM users WHERE id = ?
     `);
@@ -356,40 +365,55 @@ class DatabaseManager {
     if (!user) {
       throw new Error("User not found");
     }
-    return { ...user, id: user.id.toString() };
+    return {
+      ...user,
+      id: user.id.toString(),
+      isPremium: Boolean(user.isPremium),
+    };
   }
 
   getUserByEmail(email: string): User | null {
     const stmt = this.db.prepare(`
       SELECT id, email, name, google_id as googleId, role,
              hashed_password as hashedPassword, is_verified as isVerified,
+             is_premium as isPremium,
              created_at as createdAt, updated_at as updatedAt
       FROM users WHERE email = ?
     `);
     const user = stmt.get(email) as DatabaseUser | undefined;
-    return user ? { ...user, id: user.id.toString() } : null;
+    return user
+      ? { ...user, id: user.id.toString(), isPremium: Boolean(user.isPremium) }
+      : null;
   }
 
   getUserByGoogleId(googleId: string): User | null {
     const stmt = this.db.prepare(`
       SELECT id, email, name, google_id as googleId, role,
              hashed_password as hashedPassword, is_verified as isVerified,
+             is_premium as isPremium,
              created_at as createdAt, updated_at as updatedAt
       FROM users WHERE google_id = ?
     `);
     const user = stmt.get(googleId) as DatabaseUser | undefined;
-    return user ? { ...user, id: user.id.toString() } : null;
+    return user
+      ? { ...user, id: user.id.toString(), isPremium: Boolean(user.isPremium) }
+      : null;
   }
 
   getAllUsers(limit: number = 100, offset: number = 0): User[] {
     const stmt = this.db.prepare(`
       SELECT id, email, name, google_id as googleId, role,
              hashed_password as hashedPassword, is_verified as isVerified,
+             is_premium as isPremium,
              created_at as createdAt, updated_at as updatedAt
       FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
     `);
     const users = stmt.all(limit, offset) as DatabaseUser[];
-    return users.map((user) => ({ ...user, id: user.id.toString() }));
+    return users.map((user) => ({
+      ...user,
+      id: user.id.toString(),
+      isPremium: Boolean(user.isPremium),
+    }));
   }
 
   async verifyPassword(email: string, password: string): Promise<User | null> {
@@ -434,6 +458,14 @@ class DatabaseManager {
     const stmt = this.db.prepare("DELETE FROM users WHERE id = ?");
     const result = stmt.run(id);
     return result.changes > 0;
+  }
+
+  setPremiumStatus(id: string, isPremium: boolean): User {
+    const stmt = this.db.prepare(`
+      UPDATE users SET is_premium = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `);
+    stmt.run(isPremium ? 1 : 0, id);
+    return this.getUserById(parseInt(id));
   }
 
   // Session management for JWT blacklisting

@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import authApi from "@/lib/authApi";
+import { Captcha } from "@/components/ui/captcha";
 
 // Declare Google type for TypeScript
 declare global {
@@ -42,6 +43,9 @@ export function LoginForm() {
   const [error, setError] = useState("");
   const [googleInitialized, setGoogleInitialized] = useState(false);
   const [googleScriptReady, setGoogleScriptReady] = useState(false);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const captchaResetRef = useRef(captchaReset);
 
   const auth = useAuth();
   const navigate = useNavigate();
@@ -131,6 +135,10 @@ export function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!captchaVerified) {
+      setError("Please complete the CAPTCHA.");
+      return;
+    }
     setIsLoading(true);
     setError("");
 
@@ -157,6 +165,10 @@ export function LoginForm() {
       console.error("Auth error:", error);
     } finally {
       setIsLoading(false);
+      // Reset CAPTCHA after every attempt
+      setCaptchaVerified(false);
+      captchaResetRef.current += 1;
+      setCaptchaReset(captchaResetRef.current);
     }
   };
 
@@ -289,10 +301,13 @@ export function LoginForm() {
           />
         </div>
 
+        {/* CAPTCHA */}
+        <Captcha onVerified={setCaptchaVerified} reset={captchaReset} />
+
         <Button
           type="submit"
           className="w-full bg-cherry-rose hover:bg-green-600 text-white disabled:opacity-50"
-          disabled={isLoading}
+          disabled={isLoading || !captchaVerified}
         >
           {isLoading ? (
             <div className="flex items-center gap-2">

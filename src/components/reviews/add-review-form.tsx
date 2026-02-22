@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Filter } from "bad-words";
 import { Button } from "@/components/ui/button";
 import { submitReview, type ProximitiReview } from "@/lib/reviewApi";
 import { useAuth } from "@/App";
+import { Captcha } from "@/components/ui/captcha";
 
 const profanityFilter = new Filter();
 
@@ -22,6 +23,9 @@ export function AddReviewForm({
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const captchaResetRef = useRef(0);
 
   // Real-time profanity detection — mirrors the server-side check
   const hasProfanity = useMemo(() => {
@@ -50,6 +54,10 @@ export function AddReviewForm({
     e.preventDefault();
     setError(null);
 
+    if (!captchaVerified) {
+      setError("Please complete the CAPTCHA.");
+      return;
+    }
     if (rating === 0) {
       setError("Please select a star rating.");
       return;
@@ -69,6 +77,10 @@ export function AddReviewForm({
       onReviewSubmitted(review);
       setRating(0);
       setText("");
+      // Reset CAPTCHA for the next review
+      setCaptchaVerified(false);
+      captchaResetRef.current += 1;
+      setCaptchaReset(captchaResetRef.current);
     } catch (err: any) {
       setError(err.message || "Failed to submit review. Please try again.");
     } finally {
@@ -164,9 +176,18 @@ export function AddReviewForm({
         </p>
       )}
 
+      {/* CAPTCHA */}
+      <Captcha onVerified={setCaptchaVerified} reset={captchaReset} />
+
       <Button
         type="submit"
-        disabled={submitting || rating === 0 || text.trim().length < 10 || hasProfanity}
+        disabled={
+          submitting ||
+          rating === 0 ||
+          text.trim().length < 10 ||
+          hasProfanity ||
+          !captchaVerified
+        }
         className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
       >
         {submitting ? "Submitting…" : "Submit Review"}

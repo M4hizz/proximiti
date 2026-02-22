@@ -8,6 +8,7 @@ export interface User {
   name: string;
   role: "user" | "admin";
   isVerified: boolean;
+  isPremium: boolean;
   createdAt?: string;
 }
 

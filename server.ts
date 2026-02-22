@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import dotenv from "dotenv";
 import { Filter } from "bad-words";
+import Stripe from "stripe";
 
 // Import our authentication system
 import {
@@ -24,6 +25,18 @@ import db from "./src/lib/database";
 
 // Load environment variables
 dotenv.config();
+
+// ─── Stripe Initialization ───────────────────────────────────────────────────
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, { apiVersion: "2025-01-27.acacia" })
+  : null;
+
+if (!stripe) {
+  console.warn(
+    "⚠️  STRIPE_SECRET_KEY not set – Stripe checkout disabled. Demo upgrade will still work.",
+  );
+}
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -2471,6 +2484,174 @@ app.post(
     } catch (error) {
       console.error("Error cancelling rideshare:", error);
       res.status(500).json({ error: "Failed to cancel rideshare" });
+    }
+  },
+);
+
+// ─── Payments / Premium API ───────────────────────────────────────────────────
+
+/**
+ * POST /api/payments/create-checkout-session
+ * Creates a Stripe Checkout session for the Premium subscription.
+ * Requires authentication.
+ */
+app.post(
+  "/api/payments/create-checkout-session",
+  authenticate,
+  async (req: Request, res: Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.user.id;
+    const userEmail = authReq.user.email;
+
+    if (!stripe) {
+      return res.status(503).json({
+        error: "Stripe is not configured",
+        hint: "Set STRIPE_SECRET_KEY in your .env file, or use /api/payments/demo-upgrade for hackathon demo.",
+      });
+    }
+
+    const priceId = process.env.STRIPE_PRICE_ID;
+    if (!priceId) {
+      return res.status(503).json({
+        error: "STRIPE_PRICE_ID not configured",
+        hint: "Set STRIPE_PRICE_ID in your .env file.",
+      });
+    }
+
+    try {
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        payment_method_types: ["card"],
+        customer_email: userEmail,
+        metadata: { userId },
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${frontendUrl}/?premium=success`,
+        cancel_url: `${frontendUrl}/?premium=cancelled`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error("Stripe checkout error:", error);
+      res.status(500).json({ error: "Failed to create checkout session" });
+    }
+  },
+);
+
+/**
+ * POST /api/payments/webhook
+ * Stripe webhook: marks user as premium when payment succeeds.
+ * Must receive raw body — register BEFORE express.json() parses it.
+ */
+app.post(
+  "/api/payments/webhook",
+  express.raw({ type: "application/json" }),
+  async (req: Request, res: Response) => {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!stripe || !webhookSecret) {
+      return res.status(400).json({ error: "Stripe webhook not configured" });
+    }
+
+    const sig = req.headers["stripe-signature"] as string;
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } catch (err: any) {
+      console.error("Webhook signature verification failed:", err.message);
+      return res.status(400).json({ error: `Webhook error: ${err.message}` });
+    }
+
+    try {
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.userId;
+        if (userId) {
+          db.setPremiumStatus(userId, true);
+          console.log(`\u2b50 User ${userId} upgraded to Premium via Stripe`);
+        }
+      } else if (
+        event.type === "customer.subscription.deleted" ||
+        event.type === "invoice.payment_failed"
+      ) {
+        // Optionally handle cancellation / failed payments
+        const obj = event.data.object as Stripe.Subscription | Stripe.Invoice;
+        const customerId = "customer" in obj ? (obj.customer as string) : null;
+        if (customerId) {
+          // Look up user by Stripe customer id if you store it — skipped for demo
+          console.log(
+            `Subscription event ${event.type} for customer ${customerId}`,
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Error handling webhook event:", err);
+    }
+
+    res.json({ received: true });
+  },
+);
+
+/**
+ * POST /api/payments/demo-upgrade
+ * HACKATHON DEMO: instantly grants Premium to the logged-in user.
+ * No Stripe required.
+ */
+app.post(
+  "/api/payments/demo-upgrade",
+  authenticate,
+  (req: Request, res: Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const user = db.setPremiumStatus(authReq.user.id, true);
+      console.log(
+        `\ud83c\udf89 Demo: User ${user.id} (${user.email}) upgraded to Premium`,
+      );
+      res.json({
+        message: "Demo upgrade successful! You now have Premium access.",
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          isVerified: user.isVerified,
+          isPremium: user.isPremium,
+        },
+      });
+    } catch (error: any) {
+      console.error("Demo upgrade error:", error);
+      res.status(500).json({ error: "Failed to upgrade account" });
+    }
+  },
+);
+
+/**
+ * DELETE /api/payments/demo-downgrade
+ * HACKATHON DEMO: reverts Premium for the logged-in user (reset for demo purposes).
+ */
+app.delete(
+  "/api/payments/demo-downgrade",
+  authenticate,
+  (req: Request, res: Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const user = db.setPremiumStatus(authReq.user.id, false);
+      res.json({
+        message: "Premium access removed (demo reset).",
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          isVerified: user.isVerified,
+          isPremium: user.isPremium,
+        },
+      });
+    } catch (error: any) {
+      console.error("Demo downgrade error:", error);
+      res.status(500).json({ error: "Failed to downgrade account" });
     }
   },
 );

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Tag, Copy, Check, Clock, Lock } from "lucide-react";
+import { Tag, Copy, Check, Clock, Lock, Crown } from "lucide-react";
 import type { Coupon } from "@/lib/couponApi";
 import {
   getBusinessCoupons,
@@ -11,6 +11,8 @@ import {
   formatCouponDate,
 } from "@/lib/couponApi";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/App";
+import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 
 interface DealsSectionProps {
   businessId: string;
@@ -20,11 +22,13 @@ interface DealsSectionProps {
  * Displays active coupons for a business
  */
 export function DealsSection({ businessId }: DealsSectionProps) {
+  const { user } = useAuth();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [redeemingCode, setRedeemingCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   useEffect(() => {
     loadCoupons();
@@ -109,7 +113,7 @@ export function DealsSection({ businessId }: DealsSectionProps) {
           const usageFull =
             coupon.usageLimit !== null &&
             coupon.usageCount >= coupon.usageLimit;
-          const isPremiumLocked = coupon.isPremiumOnly; // TODO: && !user.isPremium
+          const isPremiumLocked = coupon.isPremiumOnly && !user?.isPremium;
 
           return (
             <div
@@ -117,7 +121,7 @@ export function DealsSection({ businessId }: DealsSectionProps) {
               className={`p-4 rounded-lg border ${
                 expired || !valid || isPremiumLocked
                   ? "bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 opacity-60"
-                  : "bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-green-200 dark:border-green-800"
+                  : "bg-linear-to-br from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-green-200 dark:border-green-800"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -188,7 +192,9 @@ export function DealsSection({ businessId }: DealsSectionProps) {
                     onClick={() => handleCopyCode(coupon.couponCode)}
                     disabled={expired || !valid || isPremiumLocked}
                     className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={isPremiumLocked ? "Premium members only" : "Copy code"}
+                    title={
+                      isPremiumLocked ? "Premium members only" : "Copy code"
+                    }
                   >
                     {isPremiumLocked ? (
                       <Lock className="w-4 h-4 text-gray-400" />
@@ -200,28 +206,40 @@ export function DealsSection({ businessId }: DealsSectionProps) {
                   </button>
                 </div>
 
-                {/* Redeem button */}
-                <Button
-                  onClick={() => handleRedeem(coupon.couponCode)}
-                  disabled={expired || !valid || isPremiumLocked || redeemingCode === coupon.couponCode}
-                  className="bg-cherry-rose hover:bg-green-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={isPremiumLocked ? "Premium members only" : ""}
-                >
-                  {isPremiumLocked ? (
-                    <>
-                      <Lock className="w-4 h-4" />
-                    </>
-                  ) : redeemingCode === coupon.couponCode ? (
-                    "Redeeming..."
-                  ) : (
-                    "Redeem"
-                  )}
-                </Button>
+                {/* Redeem / Upgrade button */}
+                {isPremiumLocked ? (
+                  <Button
+                    onClick={() => setShowUpgradeModal(true)}
+                    className="bg-linear-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-semibold shadow"
+                  >
+                    <Crown className="w-4 h-4 mr-1" />
+                    Upgrade
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => handleRedeem(coupon.couponCode)}
+                    disabled={
+                      expired || !valid || redeemingCode === coupon.couponCode
+                    }
+                    className="bg-cherry-rose hover:bg-green-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {redeemingCode === coupon.couponCode
+                      ? "Redeeming..."
+                      : "Redeem"}
+                  </Button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Premium upgrade modal */}
+      <PremiumUpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        onUpgraded={() => setShowUpgradeModal(false)}
+      />
     </div>
   );
 }
