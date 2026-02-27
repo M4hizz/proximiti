@@ -172,6 +172,20 @@ class AuthApiService {
     });
   }
 
+  // Admin: Remove a user's plan (local only, no Stripe)
+  async adminRemoveUserPlan(userId: string): Promise<{ message: string }> {
+    return this.request(`/admin/users/${userId}/plan`, {
+      method: "DELETE",
+    });
+  }
+
+  // Admin: Permanently delete a user account
+  async adminDeleteUser(userId: string): Promise<{ message: string }> {
+    return this.request(`/admin/users/${userId}`, {
+      method: "DELETE",
+    });
+  }
+
   // Get businesses (optional auth)
   async getBusinesses(): Promise<{
     businesses: any[];

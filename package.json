@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "server": "tsx server.ts",
+    "start": "tsx server.ts",
     "dev:all": "concurrently -n \"vite,server,ngrok\" -c \"cyan,green,yellow\" \"vite\" \"tsx server.ts\" \"ngrok http 3001\"",
     "share": "powershell -ExecutionPolicy Bypass -File share.ps1",
     "build": "tsc -b && vite build",
+    "build:frontend": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "generate-secrets": "node scripts/generate-secrets.js",

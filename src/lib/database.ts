@@ -296,6 +296,14 @@ class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_user ON rideshare_passengers(user_id);
     `);
 
+    // Migration: auto-verify all password-based users that were left unverified
+    // due to the updateUser boolean binding bug (better-sqlite3 rejects JS booleans).
+    // This app never sends real verification emails, so all local users should be verified.
+    this.db.exec(`
+      UPDATE users SET is_verified = 1
+      WHERE hashed_password IS NOT NULL AND is_verified = 0
+    `);
+
     // Create the first admin user if no users exist
     this.createDefaultAdmin();
   }
@@ -497,7 +505,8 @@ class DatabaseManager {
         // Convert camelCase to snake_case
         const dbKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
         fields.push(`${dbKey} = ?`);
-        values.push(value);
+        // better-sqlite3 does not accept JS booleans — coerce to 0/1
+        values.push(typeof value === "boolean" ? (value ? 1 : 0) : value);
       }
     });
 

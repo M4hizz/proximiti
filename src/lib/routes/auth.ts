@@ -188,11 +188,11 @@ router.post(
         });
       }
 
+      // Auto-verify on successful login — no email system is in place so
+      // blocking unverified accounts would permanently lock users out.
       if (!user.isVerified) {
-        return res.status(401).json({
-          error: "Account not verified",
-          message: "Please verify your email address first",
-        });
+        db.updateUser(user.id, { isVerified: true });
+        user.isVerified = true;
       }
 
       // Generate JWT tokens
@@ -261,23 +261,20 @@ router.post(
           name,
           password,
           role: "user",
-          isVerified: false, // In production, implement email verification
+          isVerified: true, // Auto-verify on registration
         });
-
-        // For demo purposes, auto-verify. In production, send verification email
-        const verifiedUser = db.updateUser(user.id, { isVerified: true });
 
         res.status(201).json({
           message: "Registration successful",
           user: {
-            id: verifiedUser.id,
-            email: verifiedUser.email,
-            name: verifiedUser.name,
-            role: verifiedUser.role,
-            isVerified: verifiedUser.isVerified,
-            isPremium: verifiedUser.isPremium,
-            planType: verifiedUser.planType,
-            planExpiresAt: verifiedUser.planExpiresAt,
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            isVerified: user.isVerified,
+            isPremium: user.isPremium,
+            planType: user.planType,
+            planExpiresAt: user.planExpiresAt,
           },
         });
       } catch (error: any) {

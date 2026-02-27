@@ -11,6 +11,8 @@ import {
   Tag,
   XCircle,
   Crown,
+  Trash2,
+  BadgeX,
 } from "lucide-react";
 import { CouponManagement } from "@/components/coupon-management";
 import type { Business } from "@/lib/businesses";
@@ -59,6 +61,36 @@ export function AdminPanel({
       return;
     try {
       await authApi.adminCancelUserSubscription(userId);
+      await fetchUsers();
+    } catch (error: any) {
+      setError(error.message);
+    }
+  };
+
+  const handleRemovePlan = async (userId: string, userName: string) => {
+    if (
+      !confirm(
+        `Remove plan for "${userName}"? This will revoke their premium access without cancelling any Stripe subscription.`,
+      )
+    )
+      return;
+    try {
+      await authApi.adminRemoveUserPlan(userId);
+      await fetchUsers();
+    } catch (error: any) {
+      setError(error.message);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (
+      !confirm(
+        `Permanently delete "${userName}"? This cannot be undone and will remove all their data.`,
+      )
+    )
+      return;
+    try {
+      await authApi.adminDeleteUser(userId);
       await fetchUsers();
     } catch (error: any) {
       setError(error.message);
@@ -204,13 +236,27 @@ export function AdminPanel({
                                 onClick={() =>
                                   handleCancelSubscription(userData.id)
                                 }
-                                className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
-                                title="Cancel subscription"
+                                className="text-orange-400 hover:text-orange-300 hover:bg-orange-900/20"
+                                title="Cancel Stripe subscription"
                               >
                                 <XCircle className="w-4 h-4 mr-1" />
                                 Cancel Sub
                               </Button>
                             )}
+                          {userData.isPremium && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                handleRemovePlan(userData.id, userData.name)
+                              }
+                              className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-900/20"
+                              title="Remove premium plan"
+                            >
+                              <BadgeX className="w-4 h-4 mr-1" />
+                              Remove Plan
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -223,6 +269,18 @@ export function AdminPanel({
                             className="text-gray-400 hover:text-white"
                           >
                             {userData.role === "admin" ? "Demote" : "Promote"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleDeleteUser(userData.id, userData.name)
+                            }
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                            title="Permanently delete user"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
                           </Button>
                         </>
                       )}

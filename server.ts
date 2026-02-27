@@ -349,6 +349,61 @@ app.delete(
   },
 );
 
+// Admin: remove a user's premium plan (local only, no Stripe call)
+app.delete(
+  "/api/admin/users/:id/plan",
+  authenticate,
+  requireAdmin,
+  (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.params.id;
+    try {
+      const user = db.getUserById(parseInt(userId));
+      if (!user.isPremium) {
+        return res.status(400).json({ error: "User has no active plan" });
+      }
+      db.clearPremiumStatus(userId);
+      console.log(`🗑️ Admin removed plan for user ${userId}`);
+      res.json({ message: "User plan removed", userId });
+    } catch (error: any) {
+      console.error("Admin remove plan error:", error);
+      res.status(500).json({ error: "Failed to remove user plan" });
+    }
+  },
+);
+
+// Admin: permanently delete a user account
+app.delete(
+  "/api/admin/users/:id",
+  authenticate,
+  requireAdmin,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.params.id;
+    try {
+      // Prevent deleting yourself
+      if (req.user?.id === userId) {
+        return res
+          .status(400)
+          .json({ error: "Cannot delete your own account" });
+      }
+      const user = db.getUserById(parseInt(userId));
+      // Cancel Stripe subscription if one exists
+      if (stripe && user.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+        } catch (e) {
+          console.warn("Stripe cancel on delete failed (continuing):", e);
+        }
+      }
+      db.deleteUser(userId);
+      console.log(`🗑️ Admin permanently deleted user ${userId}`);
+      res.json({ message: "User deleted permanently", userId });
+    } catch (error: any) {
+      console.error("Admin delete user error:", error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  },
+);
+
 // ─── Reviews API ─────────────────────────────────────────────────────────────
 
 // Threshold: once Proximiti review count >= this, Google reviews are phased out
