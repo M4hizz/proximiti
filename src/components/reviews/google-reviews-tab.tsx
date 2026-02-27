@@ -33,8 +33,6 @@ interface GoogleReviewsTabProps {
   onGoogleData?: (rating: number, totalRatings: number) => void;
 }
 
-
-
 /** Formats a Unix timestamp to a human-readable date string. */
 function formatTimestamp(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString("en-CA", {

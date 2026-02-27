@@ -52,7 +52,9 @@ export interface UpdateCouponData {
 /**
  * Get active coupons for a business
  */
-export async function getBusinessCoupons(businessId: string): Promise<Coupon[]> {
+export async function getBusinessCoupons(
+  businessId: string,
+): Promise<Coupon[]> {
   const response = await fetch(`${API_URL}/businesses/${businessId}/coupons`);
   if (!response.ok) {
     throw new Error("Failed to fetch coupons");
@@ -64,8 +66,12 @@ export async function getBusinessCoupons(businessId: string): Promise<Coupon[]> 
 /**
  * Get active coupon count for a business (for badge display)
  */
-export async function getBusinessCouponCount(businessId: string): Promise<number> {
-  const response = await fetch(`${API_URL}/businesses/${businessId}/coupons/count`);
+export async function getBusinessCouponCount(
+  businessId: string,
+): Promise<number> {
+  const response = await fetch(
+    `${API_URL}/businesses/${businessId}/coupons/count`,
+  );
   if (!response.ok) {
     throw new Error("Failed to fetch coupon count");
   }
