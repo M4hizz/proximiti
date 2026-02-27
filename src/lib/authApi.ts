@@ -9,6 +9,9 @@ export interface User {
   role: "user" | "admin";
   isVerified: boolean;
   isPremium: boolean;
+  planType: "basic" | "essential" | "enterprise";
+  planExpiresAt: string | null;
+  stripeSubscriptionId?: string | null;
   createdAt?: string;
 }
 
@@ -157,6 +160,15 @@ class AuthApiService {
     return this.request(`/admin/users/${userId}/role`, {
       method: "PUT",
       body: JSON.stringify({ role }),
+    });
+  }
+
+  // Admin: Cancel a user's subscription
+  async adminCancelUserSubscription(
+    userId: string,
+  ): Promise<{ message: string }> {
+    return this.request(`/admin/users/${userId}/subscription`, {
+      method: "DELETE",
     });
   }
 

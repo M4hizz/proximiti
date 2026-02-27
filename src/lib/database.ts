@@ -15,6 +15,9 @@ export interface User {
   hashedPassword?: string; // For non-Google users
   isVerified: boolean;
   isPremium: boolean;
+  planType: "basic" | "essential" | "enterprise";
+  planExpiresAt: string | null;
+  stripeSubscriptionId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -261,6 +264,29 @@ class DatabaseManager {
       // Column already exists — ignore
     }
 
+    // Add plan_type and plan_expires_at columns (migration for existing DBs)
+    try {
+      this.db.exec(
+        `ALTER TABLE users ADD COLUMN plan_type TEXT DEFAULT 'basic'`,
+      );
+    } catch {
+      // Column already exists — ignore
+    }
+    try {
+      this.db.exec(
+        `ALTER TABLE users ADD COLUMN plan_expires_at DATETIME DEFAULT NULL`,
+      );
+    } catch {
+      // Column already exists — ignore
+    }
+    try {
+      this.db.exec(
+        `ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT DEFAULT NULL`,
+      );
+    } catch {
+      // Column already exists — ignore
+    }
+
     // Create indexes for rideshares
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_rideshares_status ON rideshares(status);
@@ -358,6 +384,8 @@ class DatabaseManager {
       SELECT id, email, name, google_id as googleId, role, 
              hashed_password as hashedPassword, is_verified as isVerified,
              is_premium as isPremium,
+             plan_type as planType, plan_expires_at as planExpiresAt,
+             stripe_subscription_id as stripeSubscriptionId,
              created_at as createdAt, updated_at as updatedAt
       FROM users WHERE id = ?
     `);
@@ -369,6 +397,11 @@ class DatabaseManager {
       ...user,
       id: user.id.toString(),
       isPremium: Boolean(user.isPremium),
+      planType: (user.planType || "basic") as
+        | "basic"
+        | "essential"
+        | "enterprise",
+      planExpiresAt: user.planExpiresAt ?? null,
     };
   }
 
@@ -377,12 +410,23 @@ class DatabaseManager {
       SELECT id, email, name, google_id as googleId, role,
              hashed_password as hashedPassword, is_verified as isVerified,
              is_premium as isPremium,
+             plan_type as planType, plan_expires_at as planExpiresAt,
+             stripe_subscription_id as stripeSubscriptionId,
              created_at as createdAt, updated_at as updatedAt
       FROM users WHERE email = ?
     `);
     const user = stmt.get(email) as DatabaseUser | undefined;
     return user
-      ? { ...user, id: user.id.toString(), isPremium: Boolean(user.isPremium) }
+      ? {
+          ...user,
+          id: user.id.toString(),
+          isPremium: Boolean(user.isPremium),
+          planType: (user.planType || "basic") as
+            | "basic"
+            | "essential"
+            | "enterprise",
+          planExpiresAt: user.planExpiresAt ?? null,
+        }
       : null;
   }
 
@@ -391,12 +435,23 @@ class DatabaseManager {
       SELECT id, email, name, google_id as googleId, role,
              hashed_password as hashedPassword, is_verified as isVerified,
              is_premium as isPremium,
+             plan_type as planType, plan_expires_at as planExpiresAt,
+             stripe_subscription_id as stripeSubscriptionId,
              created_at as createdAt, updated_at as updatedAt
       FROM users WHERE google_id = ?
     `);
     const user = stmt.get(googleId) as DatabaseUser | undefined;
     return user
-      ? { ...user, id: user.id.toString(), isPremium: Boolean(user.isPremium) }
+      ? {
+          ...user,
+          id: user.id.toString(),
+          isPremium: Boolean(user.isPremium),
+          planType: (user.planType || "basic") as
+            | "basic"
+            | "essential"
+            | "enterprise",
+          planExpiresAt: user.planExpiresAt ?? null,
+        }
       : null;
   }
 
@@ -405,6 +460,8 @@ class DatabaseManager {
       SELECT id, email, name, google_id as googleId, role,
              hashed_password as hashedPassword, is_verified as isVerified,
              is_premium as isPremium,
+             plan_type as planType, plan_expires_at as planExpiresAt,
+             stripe_subscription_id as stripeSubscriptionId,
              created_at as createdAt, updated_at as updatedAt
       FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
     `);
@@ -413,6 +470,11 @@ class DatabaseManager {
       ...user,
       id: user.id.toString(),
       isPremium: Boolean(user.isPremium),
+      planType: (user.planType || "basic") as
+        | "basic"
+        | "essential"
+        | "enterprise",
+      planExpiresAt: user.planExpiresAt ?? null,
     }));
   }
 
@@ -460,11 +522,45 @@ class DatabaseManager {
     return result.changes > 0;
   }
 
-  setPremiumStatus(id: string, isPremium: boolean): User {
+  setPremiumStatus(
+    id: string,
+    isPremium: boolean,
+    planType: "basic" | "essential" | "enterprise" = "basic",
+    planExpiresAt: string | null = null,
+    stripeSubscriptionId: string | null = null,
+  ): User {
     const stmt = this.db.prepare(`
-      UPDATE users SET is_premium = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      UPDATE users
+      SET is_premium = ?, plan_type = ?, plan_expires_at = ?,
+          stripe_subscription_id = COALESCE(?, stripe_subscription_id),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
     `);
-    stmt.run(isPremium ? 1 : 0, id);
+    stmt.run(
+      isPremium ? 1 : 0,
+      planType,
+      planExpiresAt,
+      stripeSubscriptionId,
+      id,
+    );
+    return this.getUserById(parseInt(id));
+  }
+
+  setStripeSubscriptionId(id: string, subscriptionId: string | null): void {
+    const stmt = this.db.prepare(`
+      UPDATE users SET stripe_subscription_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `);
+    stmt.run(subscriptionId, id);
+  }
+
+  clearPremiumStatus(id: string): User {
+    const stmt = this.db.prepare(`
+      UPDATE users
+      SET is_premium = 0, plan_type = 'basic', plan_expires_at = NULL,
+          stripe_subscription_id = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    stmt.run(id);
     return this.getUserById(parseInt(id));
   }
 

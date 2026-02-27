@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { businesses } from "@/lib/businesses";
+import { businesses as staticBusinesses } from "@/lib/businesses";
+import type { Business } from "@/lib/businesses";
 import {
   getAllCoupons,
   createCoupon,
@@ -14,20 +15,72 @@ import {
   type Coupon,
   type CreateCouponData,
 } from "@/lib/couponApi";
-import { Tag, Plus, Edit2, Trash2, Clock, AlertCircle } from "lucide-react";
+import {
+  Tag,
+  Plus,
+  Edit2,
+  Trash2,
+  Clock,
+  AlertCircle,
+  Search,
+  X,
+} from "lucide-react";
 
 interface CouponManagementProps {
   isOpen: boolean;
   onClose: () => void;
+  businesses?: Business[];
 }
 
-export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
+export function CouponManagement({
+  isOpen,
+  onClose,
+  businesses = [],
+}: CouponManagementProps) {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+
+  // Filter bar – independent business selection (for listing coupons)
+  const [filterBusinessId, setFilterBusinessId] = useState("");
+  const [filterQuery, setFilterQuery] = useState("");
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [filterBusinessName, setFilterBusinessName] = useState("");
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  // Form – independent business selection (for creating/editing)
+  const [formBusinessId, setFormBusinessId] = useState("");
+  const [formBusinessQuery, setFormBusinessQuery] = useState("");
+  const [showFormDropdown, setShowFormDropdown] = useState(false);
+  const [formBusinessName, setFormBusinessName] = useState("");
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // Derive filtered lists synchronously from the businesses prop
+  const filterResults = businesses.filter(
+    (b) =>
+      !filterQuery.trim() ||
+      b.name.toLowerCase().includes(filterQuery.trim().toLowerCase()) ||
+      (b.address ?? "")
+        .toLowerCase()
+        .includes(filterQuery.trim().toLowerCase()),
+  );
+
+  const formBusinessResults = businesses.filter(
+    (b) =>
+      !formBusinessQuery.trim() ||
+      b.name.toLowerCase().includes(formBusinessQuery.trim().toLowerCase()) ||
+      (b.address ?? "")
+        .toLowerCase()
+        .includes(formBusinessQuery.trim().toLowerCase()),
+  );
+
+  // Name lookup for coupon list: passed businesses first, then static fallback
+  const getBusinessName = (id: string) =>
+    businesses.find((b) => b.id === id)?.name ||
+    staticBusinesses.find((b) => b.id === id)?.name ||
+    id;
 
   // Form state
   const [formData, setFormData] = useState<CreateCouponData>({
@@ -48,15 +101,75 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
     if (isOpen) {
       fetchCoupons();
     }
-  }, [isOpen, selectedBusinessId]);
+  }, [isOpen, filterBusinessId]);
+
+  // Clear search state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setFilterQuery("");
+      setFilterBusinessName("");
+      setFilterBusinessId("");
+    }
+  }, [isOpen]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setShowFilterDropdown(false);
+      }
+      if (formRef.current && !formRef.current.contains(e.target as Node)) {
+        setShowFormDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  /** Fetch real businesses: nearby (empty query) or text search */
+  const handleFilterSearch = (q: string) => {
+    setFilterQuery(q);
+    setShowFilterDropdown(true);
+  };
+
+  const handleFormSearch = (q: string) => {
+    setFormBusinessQuery(q);
+    setShowFormDropdown(true);
+  };
+
+  const selectFilterBusiness = (b: Business) => {
+    setFilterBusinessId(b.id);
+    setFilterBusinessName(b.name);
+    setFilterQuery(b.name);
+    setShowFilterDropdown(false);
+  };
+
+  const clearFilter = () => {
+    setFilterBusinessId("");
+    setFilterBusinessName("");
+    setFilterQuery("");
+    setShowFilterDropdown(false);
+  };
+
+  const selectFormBusiness = (b: Business) => {
+    setFormBusinessId(b.id);
+    setFormBusinessName(b.name);
+    setFormBusinessQuery(b.name);
+    setShowFormDropdown(false);
+  };
+
+  const clearFormBusiness = () => {
+    setFormBusinessId("");
+    setFormBusinessName("");
+    setFormBusinessQuery("");
+    setShowFormDropdown(false);
+  };
 
   const fetchCoupons = async () => {
     try {
       setLoading(true);
       setError("");
-      const data = await getAllCoupons(
-        selectedBusinessId || undefined,
-      );
+      const data = await getAllCoupons(filterBusinessId || undefined);
       setCoupons(data);
     } catch (err: any) {
       setError(err.message || "Failed to fetch coupons");
@@ -67,7 +180,7 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBusinessId) {
+    if (!formBusinessId) {
       setError("Please select a business");
       return;
     }
@@ -79,7 +192,7 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
       if (editingCoupon) {
         await updateCoupon(editingCoupon.id, formData);
       } else {
-        await createCoupon(selectedBusinessId, formData);
+        await createCoupon(formBusinessId, formData);
       }
 
       await fetchCoupons();
@@ -94,7 +207,10 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
 
   const handleEdit = (coupon: Coupon) => {
     setEditingCoupon(coupon);
-    setSelectedBusinessId(coupon.businessId);
+    setFormBusinessId(coupon.businessId);
+    const name = getBusinessName(coupon.businessId);
+    setFormBusinessName(name);
+    setFormBusinessQuery(name);
     setFormData({
       title: coupon.title,
       description: coupon.description,
@@ -139,6 +255,9 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
 
   const resetForm = () => {
     setEditingCoupon(null);
+    setFormBusinessId("");
+    setFormBusinessName("");
+    setFormBusinessQuery("");
     setFormData({
       title: "",
       description: "",
@@ -190,22 +309,77 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
 
         {/* Filter */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <Label className="text-gray-700 dark:text-gray-300">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Label className="text-gray-700 dark:text-gray-300 shrink-0">
               Filter by Business:
             </Label>
-            <select
-              value={selectedBusinessId}
-              onChange={(e) => setSelectedBusinessId(e.target.value)}
-              className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-            >
-              <option value="">All Businesses</option>
-              {businesses.map((business) => (
-                <option key={business.id} value={business.id}>
-                  {business.name}
-                </option>
-              ))}
-            </select>
+            <div ref={filterRef} className="relative min-w-65">
+              <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 overflow-hidden">
+                <Search className="w-4 h-4 ml-3 text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  value={filterQuery}
+                  onChange={(e) => handleFilterSearch(e.target.value)}
+                  onFocus={() => {
+                    setShowFilterDropdown(true);
+                  }}
+                  placeholder="Search businesses…"
+                  className="flex-1 px-3 py-2 bg-transparent text-gray-900 dark:text-white text-sm outline-none"
+                />
+                {filterQuery && (
+                  <button
+                    onClick={clearFilter}
+                    className="mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    type="button"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {showFilterDropdown && filterResults.length > 0 && (
+                <ul className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl text-sm">
+                  <li>
+                    <button
+                      type="button"
+                      onClick={clearFilter}
+                      className="w-full text-left px-4 py-2 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 italic"
+                    >
+                      All Businesses
+                    </button>
+                  </li>
+                  {filterResults.map((b) => (
+                    <li key={b.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectFilterBusiness(b)}
+                        className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                          filterBusinessId === b.id
+                            ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-medium"
+                            : "text-gray-900 dark:text-white"
+                        }`}
+                      >
+                        <span className="block truncate">{b.name}</span>
+                        {b.address && (
+                          <span className="block text-xs text-gray-400 truncate mt-0.5">
+                            {b.address}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {filterBusinessName && (
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Showing:{" "}
+                <strong className="text-gray-900 dark:text-white">
+                  {filterBusinessName}
+                </strong>
+              </span>
+            )}
           </div>
         </div>
 
@@ -227,21 +401,75 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <Label htmlFor="business">Business *</Label>
-                  <select
-                    id="business"
-                    value={selectedBusinessId}
-                    onChange={(e) => setSelectedBusinessId(e.target.value)}
-                    required
-                    disabled={!!editingCoupon}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white disabled:opacity-50"
-                  >
-                    <option value="">Select a business</option>
-                    {businesses.map((business) => (
-                      <option key={business.id} value={business.id}>
-                        {business.name}
-                      </option>
-                    ))}
-                  </select>
+                  {editingCoupon ? (
+                    <div className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700/60 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 text-sm opacity-70">
+                      {formBusinessName || formBusinessId}
+                    </div>
+                  ) : (
+                    <div ref={formRef} className="relative">
+                      <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 overflow-hidden">
+                        <Search className="w-4 h-4 ml-3 text-gray-400 shrink-0" />
+                        <input
+                          type="text"
+                          value={formBusinessQuery}
+                          onChange={(e) => handleFormSearch(e.target.value)}
+                          onFocus={() => {
+                            setShowFormDropdown(true);
+                          }}
+                          placeholder="Search and select a business…"
+                          className="flex-1 px-3 py-2 bg-transparent text-gray-900 dark:text-white text-sm outline-none"
+                          required={!formBusinessId}
+                        />
+                        {formBusinessQuery && (
+                          <button
+                            onClick={clearFormBusiness}
+                            className="mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                            type="button"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      {showFormDropdown && formBusinessResults.length > 0 && (
+                        <ul className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl text-sm">
+                          {formBusinessResults.map((b) => (
+                            <li key={b.id}>
+                              <button
+                                type="button"
+                                onClick={() => selectFormBusiness(b)}
+                                className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                                  formBusinessId === b.id
+                                    ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-medium"
+                                    : "text-gray-900 dark:text-white"
+                                }`}
+                              >
+                                <span className="block truncate">{b.name}</span>
+                                {b.address && (
+                                  <span className="block text-xs text-gray-400 truncate mt-0.5">
+                                    {b.address}
+                                  </span>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {formBusinessId && (
+                        <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                          ✓ Selected: {formBusinessName || formBusinessId}
+                        </p>
+                      )}
+                      {!formBusinessId &&
+                        formBusinessQuery.length > 0 &&
+                        formBusinessResults.length === 0 && (
+                          <p className="mt-1 text-xs text-gray-400">
+                            No businesses found. Try a different search.
+                          </p>
+                        )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="col-span-2">
@@ -292,13 +520,16 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
 
                 <div>
                   <Label htmlFor="discountValue">
-                    Discount Value * ({formData.discountType === "percentage" ? "%" : "$"})
+                    Discount Value * (
+                    {formData.discountType === "percentage" ? "%" : "$"})
                   </Label>
                   <Input
                     id="discountValue"
                     type="number"
                     min="0"
-                    max={formData.discountType === "percentage" ? "100" : undefined}
+                    max={
+                      formData.discountType === "percentage" ? "100" : undefined
+                    }
                     step="0.01"
                     value={formData.discountValue}
                     onChange={(e) =>
@@ -338,7 +569,9 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        usageLimit: e.target.value ? parseInt(e.target.value) : undefined,
+                        usageLimit: e.target.value
+                          ? parseInt(e.target.value)
+                          : undefined,
                       })
                     }
                     placeholder="Unlimited"
@@ -426,7 +659,7 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
                 </div>
               ) : (
                 coupons.map((coupon) => {
-                  const business = businesses.find((b) => b.id === coupon.businessId);
+                  const businessName = getBusinessName(coupon.businessId);
                   const valid = isCouponValid(coupon);
                   const expiringSoon = isExpiringSoon(coupon);
 
@@ -462,7 +695,7 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
                           </div>
 
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                            {business?.name || "Unknown Business"}
+                            {businessName}
                           </p>
 
                           <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
@@ -470,13 +703,18 @@ export function CouponManagement({ isOpen, onClose }: CouponManagementProps) {
                           </p>
 
                           <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            <span>Code: <strong>{coupon.couponCode}</strong></span>
                             <span>
-                              Used: {coupon.usageCount}
-                              {coupon.usageLimit ? ` / ${coupon.usageLimit}` : ""}
+                              Code: <strong>{coupon.couponCode}</strong>
                             </span>
                             <span>
-                              Expires: {new Date(coupon.endDate).toLocaleDateString()}
+                              Used: {coupon.usageCount}
+                              {coupon.usageLimit
+                                ? ` / ${coupon.usageLimit}`
+                                : ""}
+                            </span>
+                            <span>
+                              Expires:{" "}
+                              {new Date(coupon.endDate).toLocaleDateString()}
                             </span>
                           </div>
                         </div>

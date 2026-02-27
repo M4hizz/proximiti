@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth, useTheme } from "@/App";
 import { MapView } from "@/components/map-view";
 import { BusinessCard } from "@/components/business-card";
@@ -25,8 +25,10 @@ import {
   Bookmark,
   Sparkles,
   Car,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PlansModal } from "@/components/plans-modal";
 
 export type SortOption = "location" | "reviews" | "az" | "price";
 
@@ -43,6 +45,7 @@ const sortOptions: { value: SortOption; label: string }[] = [
  */
 export function BusinessFinder() {
   const navigate = useNavigate();
+  const location = useLocation();
   const auth = useAuth();
   const { theme, toggleTheme } = useTheme();
 
@@ -58,6 +61,30 @@ export function BusinessFinder() {
   const [nearbyBusinesses, setNearbyBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [showPlansModal, setShowPlansModal] = useState(false);
+  const [premiumNotification, setPremiumNotification] = useState<
+    "success" | "cancelled" | null
+  >(null);
+
+  // Handle return from Stripe checkout (?premium=success or ?premium=cancelled)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const premiumParam = params.get("premium");
+    if (premiumParam === "success") {
+      // Refresh user so isPremium / planType reflect the new state
+      auth.refreshUser().then(() => {
+        setPremiumNotification("success");
+        setTimeout(() => setPremiumNotification(null), 6000);
+      });
+      // Clean URL without re-rendering the whole page
+      navigate("/", { replace: true });
+    } else if (premiumParam === "cancelled") {
+      setPremiumNotification("cancelled");
+      setTimeout(() => setPremiumNotification(null), 4000);
+      navigate("/", { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
   const [sortBy, setSortBy] = useState<SortOption>("location");
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [showBookmarkedOnly, setShowBookmarkedOnly] = useState(false);
@@ -388,6 +415,29 @@ export function BusinessFinder() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+      {/* Stripe return notifications */}
+      {premiumNotification === "success" && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-100 flex items-center gap-3 px-5 py-3 bg-green-600 text-white rounded-xl shadow-xl text-sm font-medium animate-fade-in">
+          🎉 You're now Premium! Enjoy your new plan.
+          <button
+            onClick={() => setPremiumNotification(null)}
+            className="ml-2 text-white/70 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {premiumNotification === "cancelled" && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-100 flex items-center gap-3 px-5 py-3 bg-gray-700 text-white rounded-xl shadow-xl text-sm font-medium">
+          Payment cancelled — no charge was made.
+          <button
+            onClick={() => setPremiumNotification(null)}
+            className="ml-2 text-white/70 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 overflow-visible">
         <div className="max-w-7xl mx-auto px-4 py-4 overflow-visible">
@@ -436,6 +486,27 @@ export function BusinessFinder() {
                       <span className="hidden sm:inline">Admin</span>
                     </Button>
                   )}
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowPlansModal(true)}
+                    className={
+                      auth.user?.isPremium
+                        ? "text-green-400 hover:text-green-300 hover:bg-gray-800"
+                        : "text-yellow-400 hover:text-yellow-300 hover:bg-gray-800"
+                    }
+                    title={
+                      auth.user?.isPremium
+                        ? "Manage Plan"
+                        : "Upgrade to Premium"
+                    }
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    <span className="hidden sm:inline">
+                      {auth.user?.isPremium ? "Plan" : "Upgrade"}
+                    </span>
+                  </Button>
 
                   <Button
                     variant="ghost"
@@ -499,10 +570,10 @@ export function BusinessFinder() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 lg:h-[calc(100vh-65px)] lg:overflow-hidden lg:py-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Map section */}
-          <div className="h-100 lg:h-[calc(100vh-280px)] lg:sticky lg:top-50">
+          <div className="h-100 lg:h-[calc(100vh-200px)] lg:sticky lg:top-50">
             <MapView
               businesses={filteredBusinesses}
               selectedBusiness={selectedBusiness}
@@ -514,7 +585,7 @@ export function BusinessFinder() {
           </div>
 
           {/* List section */}
-          <div className="space-y-4">
+          <div className="relative lg:h-[calc(100vh-200px)] lg:overflow-hidden flex flex-col gap-4">
             {/* Results count and sort */}
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -619,8 +690,10 @@ export function BusinessFinder() {
               </div>
             </div>
 
-            {/* Business list with inline detail expansion */}
-            <div className="space-y-3">
+            {/* Business list */}
+            <div
+              className={`space-y-3 overflow-y-auto flex-1 ${selectedBusiness ? "scrollbar-hide" : ""}`}
+            >
               {isLoadingBusinesses || isSearching ? (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
@@ -634,21 +707,6 @@ export function BusinessFinder() {
                       isSelected={selectedBusiness?.id === business.id}
                       onClick={() => handleSelectBusiness(business)}
                     />
-                    {/* Show detail below the selected card */}
-                    {selectedBusiness?.id === business.id && (
-                      <div className="mt-3 animate-slideDown">
-                        <BusinessDetail
-                          key={selectedBusiness.id}
-                          business={selectedBusiness}
-                          onClose={() => setSelectedBusiness(null)}
-                          onGetDirections={() => {
-                            setDirectionsTarget(selectedBusiness);
-                            // Scroll map into view on mobile
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                        />
-                      </div>
-                    )}
                   </div>
                 ))
               ) : (
@@ -660,14 +718,36 @@ export function BusinessFinder() {
                 </div>
               )}
             </div>
+
+            {/* Business detail — overlays the list column */}
+            {selectedBusiness && (
+              <div className="absolute inset-0 z-20 overflow-y-auto rounded-xl shadow-2xl">
+                <BusinessDetail
+                  key={selectedBusiness.id}
+                  business={selectedBusiness}
+                  onClose={() => setSelectedBusiness(null)}
+                  onGetDirections={() => {
+                    setSelectedBusiness(null);
+                    setDirectionsTarget(selectedBusiness);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </main>
+
+      {/* Plans / Upgrade Modal */}
+      <PlansModal
+        isOpen={showPlansModal}
+        onClose={() => setShowPlansModal(false)}
+      />
 
       {/* Admin Panel Modal */}
       <AdminPanel
         isOpen={isAdminPanelOpen}
         onClose={() => setIsAdminPanelOpen(false)}
+        businesses={availableBusinesses}
       />
 
       {/* Ask AI Panel */}

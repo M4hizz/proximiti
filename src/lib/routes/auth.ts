@@ -146,6 +146,8 @@ router.post(
           role: user.role,
           isVerified: user.isVerified,
           isPremium: user.isPremium,
+          planType: user.planType,
+          planExpiresAt: user.planExpiresAt,
         },
         // Also send tokens for clients that prefer headers over cookies
         tokens: {
@@ -212,6 +214,8 @@ router.post(
           role: user.role,
           isVerified: user.isVerified,
           isPremium: user.isPremium,
+          planType: user.planType,
+          planExpiresAt: user.planExpiresAt,
         },
         tokens: {
           accessToken,
@@ -272,6 +276,8 @@ router.post(
             role: verifiedUser.role,
             isVerified: verifiedUser.isVerified,
             isPremium: verifiedUser.isPremium,
+            planType: verifiedUser.planType,
+            planExpiresAt: verifiedUser.planExpiresAt,
           },
         });
       } catch (error: any) {
@@ -432,6 +438,8 @@ router.get("/auth/me", async (req: AuthenticatedRequest, res: Response) => {
       role: req.user.role,
       isVerified: req.user.isVerified,
       isPremium: req.user.isPremium,
+      planType: req.user.planType,
+      planExpiresAt: req.user.planExpiresAt,
       createdAt: req.user.createdAt,
     },
   });

@@ -102,7 +102,14 @@ const corsOptions: CorsOptions = {
 
 app.use(cors(corsOptions));
 app.use(cookieParser(process.env.COOKIE_SECRET));
-app.use(express.json({ limit: "10mb" }));
+// Skip JSON parsing for the Stripe webhook route — it needs the raw body
+// for signature verification. express.raw() is applied inline on that route.
+app.use((req, res, next) => {
+  if (req.originalUrl === "/api/payments/webhook") {
+    return next();
+  }
+  express.json({ limit: "10mb" })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true }));
 
 // Global rate limiting
@@ -257,6 +264,10 @@ app.get(
           name: user.name,
           role: user.role,
           isVerified: user.isVerified,
+          isPremium: user.isPremium,
+          planType: user.planType,
+          planExpiresAt: user.planExpiresAt,
+          stripeSubscriptionId: user.stripeSubscriptionId,
           createdAt: user.createdAt,
         })),
         pagination: {
@@ -308,6 +319,32 @@ app.put(
         error: "Failed to update user role",
         message: "Internal server error",
       });
+    }
+  },
+);
+
+app.delete(
+  "/api/admin/users/:id/subscription",
+  authenticate,
+  requireAdmin,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.params.id;
+    try {
+      const user = db.getUserById(parseInt(userId));
+      if (!user.isPremium) {
+        return res
+          .status(400)
+          .json({ error: "User has no active subscription" });
+      }
+      if (stripe && user.stripeSubscriptionId) {
+        await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+      }
+      db.clearPremiumStatus(userId);
+      console.log(`🗑️ Admin cancelled subscription for user ${userId}`);
+      res.json({ message: "Subscription cancelled", userId });
+    } catch (error: any) {
+      console.error("Admin cancel subscription error:", error);
+      res.status(500).json({ error: "Failed to cancel subscription" });
     }
   },
 );
@@ -2502,19 +2539,27 @@ app.post(
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.user.id;
     const userEmail = authReq.user.email;
+    const planId: "essential" | "enterprise" =
+      req.body?.planId === "enterprise" ? "enterprise" : "essential";
 
-    if (!stripe) {
-      return res.status(503).json({
-        error: "Stripe is not configured",
-        hint: "Set STRIPE_SECRET_KEY in your .env file, or use /api/payments/demo-upgrade for hackathon demo.",
+    // Guard: don't let an already-subscribed user create a duplicate session
+    if (authReq.user.isPremium && authReq.user.planType === planId) {
+      return res.status(400).json({
+        error: "Already subscribed",
+        hint: `You are already on the ${planId} plan.`,
       });
     }
 
-    const priceId = process.env.STRIPE_PRICE_ID;
+    // Select price ID with fallback to legacy STRIPE_PRICE_ID
+    const priceId =
+      planId === "enterprise"
+        ? process.env.STRIPE_PRICE_ENTERPRISE || process.env.STRIPE_PRICE_ID
+        : process.env.STRIPE_PRICE_ESSENTIAL || process.env.STRIPE_PRICE_ID;
+
     if (!priceId) {
       return res.status(503).json({
-        error: "STRIPE_PRICE_ID not configured",
-        hint: "Set STRIPE_PRICE_ID in your .env file.",
+        error: "Stripe price ID not configured",
+        hint: "Set STRIPE_PRICE_ESSENTIAL / STRIPE_PRICE_ENTERPRISE in your .env file.",
       });
     }
 
@@ -2525,9 +2570,13 @@ app.post(
         mode: "subscription",
         payment_method_types: ["card"],
         customer_email: userEmail,
-        metadata: { userId },
+        metadata: { userId, planId },
+        // Also store on the subscription so invoice.paid webhooks can find the user
+        subscription_data: {
+          metadata: { userId, planId },
+        },
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${frontendUrl}/?premium=success`,
+        success_url: `${frontendUrl}/?premium=success&plan=${planId}`,
         cancel_url: `${frontendUrl}/?premium=cancelled`,
       });
 
@@ -2535,6 +2584,82 @@ app.post(
     } catch (error: any) {
       console.error("Stripe checkout error:", error);
       res.status(500).json({ error: "Failed to create checkout session" });
+    }
+  },
+);
+
+/**
+ * DELETE /api/payments/subscription
+ * Cancel the current user's Stripe subscription at period end.
+ */
+app.delete(
+  "/api/payments/subscription",
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const userId = String(authReq.user!.id);
+    const user = db.getUserById(parseInt(userId));
+
+    console.log(
+      `🔍 Cancel sub check — userId:${userId} isPremium:${user?.isPremium} subId:${user?.stripeSubscriptionId}`,
+    );
+
+    if (!user?.isPremium) {
+      return res
+        .status(400)
+        .json({ error: "No active subscription to cancel" });
+    }
+
+    try {
+      let subscriptionId = user.stripeSubscriptionId;
+
+      // If subscription ID isn't cached in DB, look it up from Stripe by customer email
+      if (!subscriptionId && stripe) {
+        const userRecord = db.getUserById(parseInt(userId));
+        const customers = await stripe.customers.list({
+          email: userRecord.email,
+          limit: 5,
+        });
+        for (const customer of customers.data) {
+          const subs = await stripe.subscriptions.list({
+            customer: customer.id,
+            status: "active",
+            limit: 5,
+          });
+          if (subs.data.length > 0) {
+            subscriptionId = subs.data[0].id;
+            db.setStripeSubscriptionId(userId, subscriptionId);
+            break;
+          }
+        }
+      }
+
+      if (stripe && subscriptionId) {
+        // Cancel at period end so user keeps access until expiry
+        await stripe.subscriptions.update(subscriptionId, {
+          cancel_at_period_end: true,
+        });
+      }
+      // Immediately downgrade in DB so frontend reflects cancellation
+      const updatedUser = db.clearPremiumStatus(userId);
+      console.log(`🗑️ User ${userId} cancelled their subscription`);
+      res.json({
+        message: "Subscription cancelled successfully",
+        user: {
+          id: String(updatedUser.id),
+          email: updatedUser.email,
+          name: updatedUser.name,
+          role: updatedUser.role,
+          isVerified: updatedUser.isVerified,
+          isPremium: updatedUser.isPremium,
+          planType: updatedUser.planType,
+          planExpiresAt: updatedUser.planExpiresAt,
+          stripeSubscriptionId: updatedUser.stripeSubscriptionId,
+        },
+      });
+    } catch (error: any) {
+      console.error("Cancel subscription error:", error);
+      res.status(500).json({ error: "Failed to cancel subscription" });
     }
   },
 );
@@ -2568,9 +2693,73 @@ app.post(
       if (event.type === "checkout.session.completed") {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.metadata?.userId;
+        const planId = (session.metadata?.planId || "essential") as
+          | "essential"
+          | "enterprise";
         if (userId) {
-          db.setPremiumStatus(userId, true);
-          console.log(`\u2b50 User ${userId} upgraded to Premium via Stripe`);
+          // Retrieve subscription to get period end date
+          let planExpiresAt: string | null = null;
+          try {
+            if (session.subscription) {
+              const sub = await stripe!.subscriptions.retrieve(
+                session.subscription as string,
+              );
+              planExpiresAt = new Date(
+                sub.current_period_end * 1000,
+              ).toISOString();
+            }
+          } catch (subErr) {
+            console.error("Could not retrieve subscription period:", subErr);
+          }
+          db.setPremiumStatus(userId, true, planId, planExpiresAt);
+          // Also store the subscription ID for future cancellation
+          if (session.subscription) {
+            db.setStripeSubscriptionId(userId, session.subscription as string);
+          }
+          console.log(
+            `⭐ User ${userId} upgraded to ${planId} via Stripe (expires: ${planExpiresAt})`,
+          );
+        }
+      } else if (event.type === "invoice.paid") {
+        // Fires on every successful renewal — update the expiry date
+        const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId =
+          typeof invoice.subscription === "string"
+            ? invoice.subscription
+            : (invoice.subscription?.id ?? null);
+        if (subscriptionId) {
+          try {
+            const sub = await stripe!.subscriptions.retrieve(subscriptionId);
+            const customerId =
+              typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+            // Find user by stripe customer id stored in subscription metadata
+            const userId = sub.metadata?.userId;
+            if (userId) {
+              const planExpiresAt = new Date(
+                sub.current_period_end * 1000,
+              ).toISOString();
+              // Get current plan type from DB to preserve it
+              const existingUser = db.getUserById(parseInt(userId));
+              db.setPremiumStatus(
+                userId,
+                true,
+                existingUser.planType || "essential",
+                planExpiresAt,
+              );
+              console.log(
+                `🔄 Subscription renewed for user ${userId} (expires: ${planExpiresAt})`,
+              );
+            } else {
+              console.log(
+                `invoice.paid: no userId in subscription metadata for customer ${customerId}`,
+              );
+            }
+          } catch (subErr) {
+            console.error(
+              "invoice.paid: could not retrieve subscription:",
+              subErr,
+            );
+          }
         }
       } else if (
         event.type === "customer.subscription.deleted" ||
@@ -2604,10 +2793,21 @@ app.post(
   authenticate,
   (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
+    const planType: "essential" | "enterprise" =
+      req.body?.planType === "enterprise" ? "enterprise" : "essential";
+    // Set expiry to 1 month from now for the demo
+    const planExpiresAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
     try {
-      const user = db.setPremiumStatus(authReq.user.id, true);
+      const user = db.setPremiumStatus(
+        authReq.user.id,
+        true,
+        planType,
+        planExpiresAt,
+      );
       console.log(
-        `\ud83c\udf89 Demo: User ${user.id} (${user.email}) upgraded to Premium`,
+        `🎉 Demo: User ${user.id} (${user.email}) upgraded to ${planType} (expires ${planExpiresAt})`,
       );
       res.json({
         message: "Demo upgrade successful! You now have Premium access.",
@@ -2618,6 +2818,8 @@ app.post(
           role: user.role,
           isVerified: user.isVerified,
           isPremium: user.isPremium,
+          planType: user.planType,
+          planExpiresAt: user.planExpiresAt,
         },
       });
     } catch (error: any) {
@@ -2637,7 +2839,7 @@ app.delete(
   (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
     try {
-      const user = db.setPremiumStatus(authReq.user.id, false);
+      const user = db.setPremiumStatus(authReq.user.id, false, "basic", null);
       res.json({
         message: "Premium access removed (demo reset).",
         user: {
@@ -2647,6 +2849,8 @@ app.delete(
           role: user.role,
           isVerified: user.isVerified,
           isPremium: user.isPremium,
+          planType: user.planType,
+          planExpiresAt: user.planExpiresAt,
         },
       });
     } catch (error: any) {
