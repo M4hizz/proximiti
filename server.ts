@@ -29,7 +29,7 @@ dotenv.config();
 // ─── Stripe Initialization ───────────────────────────────────────────────────
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: "2025-01-27.acacia" })
+  ? new Stripe(stripeSecretKey, { apiVersion: "2026-01-28.clover" })
   : null;
 
 if (!stripe) {
@@ -221,7 +221,9 @@ app.put(
         });
       }
 
-      const updatedUser = db.updateUser(req.user!.id, { name: name.trim() });
+      const updatedUser = await db.updateUser(req.user!.id, {
+        name: name.trim(),
+      });
 
       res.json({
         message: "Profile updated successfully",
@@ -248,14 +250,14 @@ app.get(
   "/api/admin/users",
   authenticate,
   requireAdmin,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       // Get pagination parameters
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = (page - 1) * limit;
 
-      const users = db.getAllUsers(limit, offset);
+      const users = await db.getAllUsers(limit, offset);
 
       res.json({
         users: users.map((user) => ({
@@ -290,7 +292,7 @@ app.put(
   "/api/admin/users/:id/role",
   authenticate,
   requireAdmin,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const id = req.params.id as string;
       const { role } = req.body;
@@ -302,7 +304,7 @@ app.put(
         });
       }
 
-      const updatedUser = db.updateUser(id, { role });
+      const updatedUser = await db.updateUser(id, { role });
 
       res.json({
         message: "User role updated successfully",
@@ -328,9 +330,9 @@ app.delete(
   authenticate,
   requireAdmin,
   async (req: AuthenticatedRequest, res: Response) => {
-    const userId = req.params.id;
+    const userId = req.params.id as string;
     try {
-      const user = db.getUserById(parseInt(userId));
+      const user = await db.getUserById(parseInt(userId));
       if (!user.isPremium) {
         return res
           .status(400)
@@ -339,7 +341,7 @@ app.delete(
       if (stripe && user.stripeSubscriptionId) {
         await stripe.subscriptions.cancel(user.stripeSubscriptionId);
       }
-      db.clearPremiumStatus(userId);
+      await db.clearPremiumStatus(userId);
       console.log(`🗑️ Admin cancelled subscription for user ${userId}`);
       res.json({ message: "Subscription cancelled", userId });
     } catch (error: any) {
@@ -354,14 +356,14 @@ app.delete(
   "/api/admin/users/:id/plan",
   authenticate,
   requireAdmin,
-  (req: AuthenticatedRequest, res: Response) => {
-    const userId = req.params.id;
+  async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.params.id as string;
     try {
-      const user = db.getUserById(parseInt(userId));
+      const user = await db.getUserById(parseInt(userId));
       if (!user.isPremium) {
         return res.status(400).json({ error: "User has no active plan" });
       }
-      db.clearPremiumStatus(userId);
+      await db.clearPremiumStatus(userId);
       console.log(`🗑️ Admin removed plan for user ${userId}`);
       res.json({ message: "User plan removed", userId });
     } catch (error: any) {
@@ -377,7 +379,7 @@ app.delete(
   authenticate,
   requireAdmin,
   async (req: AuthenticatedRequest, res: Response) => {
-    const userId = req.params.id;
+    const userId = req.params.id as string;
     try {
       // Prevent deleting yourself
       if (req.user?.id === userId) {
@@ -385,7 +387,7 @@ app.delete(
           .status(400)
           .json({ error: "Cannot delete your own account" });
       }
-      const user = db.getUserById(parseInt(userId));
+      const user = await db.getUserById(parseInt(userId));
       // Cancel Stripe subscription if one exists
       if (stripe && user.stripeSubscriptionId) {
         try {
@@ -394,7 +396,7 @@ app.delete(
           console.warn("Stripe cancel on delete failed (continuing):", e);
         }
       }
-      db.deleteUser(userId);
+      await db.deleteUser(userId);
       console.log(`🗑️ Admin permanently deleted user ${userId}`);
       res.json({ message: "User deleted permanently", userId });
     } catch (error: any) {
@@ -413,20 +415,20 @@ const PROXIMITI_PHASE_OUT_THRESHOLD = 10;
 app.get(
   "/api/reviews/:businessId",
   optionalAuthenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { businessId } = req.params as Record<string, string>;
       const limit = Math.min(parseInt(req.query.limit as string) || 5, 50);
       const offset = parseInt(req.query.offset as string) || 0;
       const requestingUserId = req.user?.id;
 
-      const { reviews, total } = db.getReviewsForBusiness(
+      const { reviews, total } = await db.getReviewsForBusiness(
         businessId,
         limit,
         offset,
         requestingUserId,
       );
-      const proximitiCount = db.getProximitiReviewCount(businessId);
+      const proximitiCount = await db.getProximitiReviewCount(businessId);
 
       // Determine if Proximiti reviews should phase out Google reviews
       const useProximitiOnly = proximitiCount >= PROXIMITI_PHASE_OUT_THRESHOLD;
@@ -434,7 +436,10 @@ app.get(
       // Check if requesting user has already reviewed this business
       let userReview = null;
       if (requestingUserId) {
-        userReview = db.getUserReviewForBusiness(businessId, requestingUserId);
+        userReview = await db.getUserReviewForBusiness(
+          businessId,
+          requestingUserId,
+        );
       }
 
       res.json({
@@ -488,7 +493,7 @@ app.post(
       }
 
       // Check for duplicate review
-      const existing = db.getUserReviewForBusiness(businessId, userId);
+      const existing = await db.getUserReviewForBusiness(businessId, userId);
       if (existing) {
         return res
           .status(409)
@@ -518,11 +523,11 @@ app.post(
 app.post(
   "/api/reviews/:reviewId/helpful",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { reviewId } = req.params as Record<string, string>;
       const userId = req.user!.id;
-      const isNowHelpful = db.toggleHelpful(reviewId, userId);
+      const isNowHelpful = await db.toggleHelpful(reviewId, userId);
       res.json({ helpful: isNowHelpful });
     } catch (error) {
       console.error("Error toggling helpful:", error);
@@ -761,7 +766,7 @@ app.get(
 
       // Return immediately if already cached
       const cacheKey = `${name}|${lat}|${lng}`;
-      const cached = db.getCachedPhoto(cacheKey);
+      const cached = await db.getCachedPhoto(cacheKey);
       if (cached) return res.redirect(302, cached);
 
       // Find place and request a photo reference in one call
@@ -783,7 +788,7 @@ app.get(
 
       // Redirect to the actual Places Photo URL (browser fetches it directly)
       const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${photoRef}&key=${apiKey}`;
-      db.cachePhoto(cacheKey, photoUrl);
+      await db.cachePhoto(cacheKey, photoUrl);
       res.redirect(302, photoUrl);
     } catch (error) {
       console.error("Places photo proxy error:", error);
@@ -2028,7 +2033,7 @@ app.get("/api/businesses/:id/coupons/count", (req: Request, res: Response) => {
 });
 
 // Redeem a coupon (public)
-app.post("/api/coupons/redeem", (req: Request, res: Response) => {
+app.post("/api/coupons/redeem", async (req: Request, res: Response) => {
   try {
     const { couponCode } = req.body;
 
@@ -2036,7 +2041,7 @@ app.post("/api/coupons/redeem", (req: Request, res: Response) => {
       return res.status(400).json({ error: "Coupon code is required" });
     }
 
-    const result = db.redeemCoupon(couponCode.trim());
+    const result = await db.redeemCoupon(couponCode.trim());
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
@@ -2059,15 +2064,15 @@ app.get(
   "/api/admin/coupons",
   authenticate,
   requireAdmin,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { businessId } = req.query;
 
       let coupons;
       if (businessId) {
-        coupons = db.getAllCouponsForBusiness(businessId as string);
+        coupons = await db.getAllCouponsForBusiness(businessId as string);
       } else {
-        coupons = db.getAllCoupons();
+        coupons = await db.getAllCoupons();
       }
 
       res.json({ coupons });
@@ -2083,7 +2088,7 @@ app.post(
   "/api/businesses/:id/coupons",
   authenticate,
   requireAdmin,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id: businessId } = req.params as { id: string };
       const {
@@ -2157,7 +2162,7 @@ app.post(
           .json({ error: "Usage limit must be a positive number" });
       }
 
-      const coupon = db.createCoupon({
+      const coupon = await db.createCoupon({
         businessId,
         title: title.trim(),
         description: description.trim(),
@@ -2189,7 +2194,7 @@ app.put(
   "/api/coupons/:couponId",
   authenticate,
   requireAdmin,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { couponId } = req.params as { couponId: string };
       const {
@@ -2272,7 +2277,7 @@ app.put(
         return res.status(400).json({ error: "No valid fields to update" });
       }
 
-      const coupon = db.updateCoupon(couponId, updates);
+      const coupon = await db.updateCoupon(couponId, updates);
 
       res.json({
         message: "Coupon updated successfully",
@@ -2293,10 +2298,10 @@ app.delete(
   "/api/coupons/:couponId",
   authenticate,
   requireAdmin,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { couponId } = req.params as { couponId: string };
-      const success = db.deleteCoupon(couponId);
+      const success = await db.deleteCoupon(couponId);
 
       if (!success) {
         return res.status(404).json({ error: "Coupon not found" });
@@ -2316,18 +2321,18 @@ app.delete(
 app.get(
   "/api/rideshares",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const includeAll = req.query.all === "true";
       const mine = req.query.mine === "true";
 
       let rideshares;
       if (mine) {
-        rideshares = db.getUserRideshares(req.user!.id);
+        rideshares = await db.getUserRideshares(req.user!.id);
       } else if (includeAll) {
-        rideshares = db.getAllRideshares(true);
+        rideshares = await db.getAllRideshares(true);
       } else {
-        rideshares = db.getActiveRideshares();
+        rideshares = await db.getActiveRideshares();
       }
 
       res.json({ rideshares });
@@ -2342,7 +2347,7 @@ app.get(
 app.get(
   "/api/rideshares/code/:code",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const code = (req.params.code as string).toUpperCase().trim();
       if (!code || code.length !== 6) {
@@ -2351,14 +2356,14 @@ app.get(
           .json({ error: "Share code must be 6 characters" });
       }
 
-      const rideshare = db.getRideshareByShareCode(code);
+      const rideshare = await db.getRideshareByShareCode(code);
       if (!rideshare) {
         return res
           .status(404)
           .json({ error: "No rideshare found with that code" });
       }
 
-      const passengers = db.getRidesharePassengers(rideshare.id);
+      const passengers = await db.getRidesharePassengers(rideshare.id);
       res.json({ rideshare, passengers });
     } catch (error) {
       console.error("Error looking up rideshare by code:", error);
@@ -2371,11 +2376,11 @@ app.get(
 app.get(
   "/api/rideshares/:id",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const id = parseInt(req.params.id as string);
-      const rideshare = db.getRideshareById(id);
-      const passengers = db.getRidesharePassengers(rideshare.id);
+      const rideshare = await db.getRideshareById(id);
+      const passengers = await db.getRidesharePassengers(rideshare.id);
 
       res.json({ rideshare, passengers });
     } catch (error: any) {
@@ -2392,7 +2397,7 @@ app.get(
 app.post(
   "/api/rideshares",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const {
         originName,
@@ -2428,7 +2433,7 @@ app.post(
           .json({ error: "Max passengers must be between 1 and 4" });
       }
 
-      const rideshare = db.createRideshare({
+      const rideshare = await db.createRideshare({
         creatorId: req.user!.id,
         originName,
         originLat: parseFloat(originLat),
@@ -2452,17 +2457,17 @@ app.post(
 app.post(
   "/api/rideshares/:id/join",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params as { id: string };
-      const result = db.joinRideshare(id, req.user!.id);
+      const result = await db.joinRideshare(id, req.user!.id);
 
       if (!result.success) {
         return res.status(400).json({ error: result.error });
       }
 
-      const rideshare = db.getRideshareById(parseInt(id));
-      const passengers = db.getRidesharePassengers(id);
+      const rideshare = await db.getRideshareById(parseInt(id));
+      const passengers = await db.getRidesharePassengers(id);
       res.json({ message: "Joined rideshare", rideshare, passengers });
     } catch (error) {
       console.error("Error joining rideshare:", error);
@@ -2475,10 +2480,10 @@ app.post(
 app.post(
   "/api/rideshares/:id/leave",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params as { id: string };
-      const result = db.leaveRideshare(id, req.user!.id);
+      const result = await db.leaveRideshare(id, req.user!.id);
 
       if (!result.success) {
         return res.status(400).json({ error: result.error });
@@ -2496,16 +2501,16 @@ app.post(
 app.post(
   "/api/rideshares/:id/accept-transport",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params as { id: string };
-      const result = db.acceptTransport(id, req.user!.id);
+      const result = await db.acceptTransport(id, req.user!.id);
 
       if (!result.success) {
         return res.status(400).json({ error: result.error });
       }
 
-      const rideshare = db.getRideshareById(parseInt(id));
+      const rideshare = await db.getRideshareById(parseInt(id));
       res.json({ message: "Transport accepted", rideshare });
     } catch (error) {
       console.error("Error accepting transport:", error);
@@ -2518,16 +2523,16 @@ app.post(
 app.post(
   "/api/rideshares/:id/start",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params as { id: string };
-      const result = db.startTransport(id, req.user!.id);
+      const result = await db.startTransport(id, req.user!.id);
 
       if (!result.success) {
         return res.status(400).json({ error: result.error });
       }
 
-      const rideshare = db.getRideshareById(parseInt(id));
+      const rideshare = await db.getRideshareById(parseInt(id));
       res.json({ message: "Transport started — lobby locked", rideshare });
     } catch (error) {
       console.error("Error starting transport:", error);
@@ -2540,16 +2545,16 @@ app.post(
 app.post(
   "/api/rideshares/:id/complete",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params as { id: string };
-      const result = db.completeRideshare(id, req.user!.id);
+      const result = await db.completeRideshare(id, req.user!.id);
 
       if (!result.success) {
         return res.status(400).json({ error: result.error });
       }
 
-      const rideshare = db.getRideshareById(parseInt(id));
+      const rideshare = await db.getRideshareById(parseInt(id));
       res.json({ message: "Ride completed", rideshare });
     } catch (error) {
       console.error("Error completing rideshare:", error);
@@ -2562,16 +2567,16 @@ app.post(
 app.post(
   "/api/rideshares/:id/cancel",
   authenticate,
-  (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params as { id: string };
-      const result = db.cancelRideshare(id, req.user!.id);
+      const result = await db.cancelRideshare(id, req.user!.id);
 
       if (!result.success) {
         return res.status(400).json({ error: result.error });
       }
 
-      const rideshare = db.getRideshareById(parseInt(id));
+      const rideshare = await db.getRideshareById(parseInt(id));
       res.json({ message: "Ride cancelled", rideshare });
     } catch (error) {
       console.error("Error cancelling rideshare:", error);
@@ -2592,13 +2597,13 @@ app.post(
   authenticate,
   async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
-    const userId = authReq.user.id;
-    const userEmail = authReq.user.email;
+    const userId = String(authReq.user!.id);
+    const userEmail = authReq.user!.email;
     const planId: "essential" | "enterprise" =
       req.body?.planId === "enterprise" ? "enterprise" : "essential";
 
     // Guard: don't let an already-subscribed user create a duplicate session
-    if (authReq.user.isPremium && authReq.user.planType === planId) {
+    if (authReq.user!.isPremium && authReq.user!.planType === planId) {
       return res.status(400).json({
         error: "Already subscribed",
         hint: `You are already on the ${planId} plan.`,
@@ -2616,6 +2621,10 @@ app.post(
         error: "Stripe price ID not configured",
         hint: "Set STRIPE_PRICE_ESSENTIAL / STRIPE_PRICE_ENTERPRISE in your .env file.",
       });
+    }
+
+    if (!stripe) {
+      return res.status(503).json({ error: "Stripe not configured" });
     }
 
     try {
@@ -2653,7 +2662,7 @@ app.delete(
   async (req: AuthenticatedRequest, res: Response) => {
     const authReq = req as AuthenticatedRequest;
     const userId = String(authReq.user!.id);
-    const user = db.getUserById(parseInt(userId));
+    const user = await db.getUserById(parseInt(userId));
 
     console.log(
       `🔍 Cancel sub check — userId:${userId} isPremium:${user?.isPremium} subId:${user?.stripeSubscriptionId}`,
@@ -2670,7 +2679,7 @@ app.delete(
 
       // If subscription ID isn't cached in DB, look it up from Stripe by customer email
       if (!subscriptionId && stripe) {
-        const userRecord = db.getUserById(parseInt(userId));
+        const userRecord = await db.getUserById(parseInt(userId));
         const customers = await stripe.customers.list({
           email: userRecord.email,
           limit: 5,
@@ -2683,7 +2692,7 @@ app.delete(
           });
           if (subs.data.length > 0) {
             subscriptionId = subs.data[0].id;
-            db.setStripeSubscriptionId(userId, subscriptionId);
+            await db.setStripeSubscriptionId(userId, subscriptionId);
             break;
           }
         }
@@ -2696,7 +2705,7 @@ app.delete(
         });
       }
       // Immediately downgrade in DB so frontend reflects cancellation
-      const updatedUser = db.clearPremiumStatus(userId);
+      const updatedUser = await db.clearPremiumStatus(userId);
       console.log(`🗑️ User ${userId} cancelled their subscription`);
       res.json({
         message: "Subscription cancelled successfully",
@@ -2760,16 +2769,19 @@ app.post(
                 session.subscription as string,
               );
               planExpiresAt = new Date(
-                sub.current_period_end * 1000,
+                (sub as any).current_period_end * 1000,
               ).toISOString();
             }
           } catch (subErr) {
             console.error("Could not retrieve subscription period:", subErr);
           }
-          db.setPremiumStatus(userId, true, planId, planExpiresAt);
+          await db.setPremiumStatus(userId, true, planId, planExpiresAt);
           // Also store the subscription ID for future cancellation
           if (session.subscription) {
-            db.setStripeSubscriptionId(userId, session.subscription as string);
+            await db.setStripeSubscriptionId(
+              userId,
+              session.subscription as string,
+            );
           }
           console.log(
             `⭐ User ${userId} upgraded to ${planId} via Stripe (expires: ${planExpiresAt})`,
@@ -2777,7 +2789,7 @@ app.post(
         }
       } else if (event.type === "invoice.paid") {
         // Fires on every successful renewal — update the expiry date
-        const invoice = event.data.object as Stripe.Invoice;
+        const invoice = event.data.object as any;
         const subscriptionId =
           typeof invoice.subscription === "string"
             ? invoice.subscription
@@ -2791,11 +2803,11 @@ app.post(
             const userId = sub.metadata?.userId;
             if (userId) {
               const planExpiresAt = new Date(
-                sub.current_period_end * 1000,
+                (sub as any).current_period_end * 1000,
               ).toISOString();
               // Get current plan type from DB to preserve it
-              const existingUser = db.getUserById(parseInt(userId));
-              db.setPremiumStatus(
+              const existingUser = await db.getUserById(parseInt(userId));
+              await db.setPremiumStatus(
                 userId,
                 true,
                 existingUser.planType || "essential",
@@ -2846,8 +2858,7 @@ app.post(
 app.post(
   "/api/payments/demo-upgrade",
   authenticate,
-  (req: Request, res: Response) => {
-    const authReq = req as AuthenticatedRequest;
+  async (req: AuthenticatedRequest, res: Response) => {
     const planType: "essential" | "enterprise" =
       req.body?.planType === "enterprise" ? "enterprise" : "essential";
     // Set expiry to 1 month from now for the demo
@@ -2855,8 +2866,8 @@ app.post(
       Date.now() + 30 * 24 * 60 * 60 * 1000,
     ).toISOString();
     try {
-      const user = db.setPremiumStatus(
-        authReq.user.id,
+      const user = await db.setPremiumStatus(
+        req.user!.id,
         true,
         planType,
         planExpiresAt,
@@ -2891,10 +2902,14 @@ app.post(
 app.delete(
   "/api/payments/demo-downgrade",
   authenticate,
-  (req: Request, res: Response) => {
-    const authReq = req as AuthenticatedRequest;
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const user = db.setPremiumStatus(authReq.user.id, false, "basic", null);
+      const user = await db.setPremiumStatus(
+        req.user!.id,
+        false,
+        "basic",
+        null,
+      );
       res.json({
         message: "Premium access removed (demo reset).",
         user: {
@@ -2936,17 +2951,26 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Proximiti API server running on http://localhost:${port}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(
-    `🔐 Security features enabled: CORS, Helmet, Rate Limiting, JWT Auth`,
-  );
-  console.log(`🗄️  Database: SQLite with role-based access control`);
+db.init()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(
+        `🚀 Proximiti API server running on http://localhost:${port}`,
+      );
+      console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+      console.log(
+        `🔐 Security features enabled: CORS, Helmet, Rate Limiting, JWT Auth`,
+      );
+      console.log(`🗄️  Database: Turso/libSQL with role-based access control`);
 
-  if (process.env.NODE_ENV !== "production") {
-    console.log(
-      `⚠️  Development mode: Remember to configure production secrets!`,
-    );
-  }
-});
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          `⚠️  Development mode: Remember to configure production secrets!`,
+        );
+      }
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Failed to initialize database:", err);
+    process.exit(1);
+  });

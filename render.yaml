@@ -3,10 +3,7 @@ services:
     name: proximiti-api
     runtime: node
     region: oregon
-    # Note: persistent disk (SQLite) requires a paid plan (Starter or above).
-    # If you want the free tier, remove the `disk:` block and accept that the
-    # database resets on each deploy. Use a hosted DB (e.g. Turso) for free-tier.
-    plan: starter
+    plan: free
     buildCommand: npm install
     startCommand: npx tsx server.ts
     healthCheckPath: /health
@@ -15,8 +12,11 @@ services:
         value: production
       - key: PORT
         value: 10000
-      - key: DATABASE_PATH
-        value: /data/database.sqlite
+      # Turso database — set these in the Render dashboard
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_AUTH_TOKEN
+        sync: false
       # Set these in the Render dashboard — do NOT commit real values
       - key: FRONTEND_URL
         sync: false
@@ -30,7 +30,3 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
-    disk:
-      name: sqlite-data
-      mountPath: /data
-      sizeGB: 1

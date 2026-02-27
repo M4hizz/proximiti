@@ -1,6 +1,5 @@
-import Database from "better-sqlite3";
+import { createClient, type Client } from "@libsql/client";
 import bcrypt from "bcrypt";
-import path from "path";
 
 export interface User {
   id: string;
@@ -8,7 +7,7 @@ export interface User {
   name: string;
   googleId?: string;
   role: "user" | "admin";
-  hashedPassword?: string; // For non-Google users
+  hashedPassword?: string;
   isVerified: boolean;
   isPremium: boolean;
   planType: "basic" | "essential" | "enterprise";
@@ -85,24 +84,113 @@ export interface Coupon {
   updatedAt: string;
 }
 
-export interface DatabaseUser extends Omit<User, "id"> {
-  id: number;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function toBool(v: unknown): boolean {
+  return v === 1 || v === 1n || v === true || v === "1";
 }
 
-class DatabaseManager {
-  private db: Database.Database;
+function toNum(v: unknown): number {
+  return typeof v === "bigint" ? Number(v) : Number(v ?? 0);
+}
 
-  constructor(dbPath: string) {
-    this.db = new Database(dbPath);
-    this.initializeTables();
+function mapUser(row: Record<string, unknown>): User {
+  return {
+    id: String(row.id),
+    email: row.email as string,
+    name: row.name as string,
+    googleId: row.googleId as string | undefined,
+    role: row.role as "user" | "admin",
+    hashedPassword: row.hashedPassword as string | undefined,
+    isVerified: toBool(row.isVerified),
+    isPremium: toBool(row.isPremium),
+    planType: ((row.planType as string) || "basic") as
+      | "basic"
+      | "essential"
+      | "enterprise",
+    planExpiresAt: (row.planExpiresAt as string) ?? null,
+    stripeSubscriptionId: (row.stripeSubscriptionId as string | null) ?? null,
+    createdAt: row.createdAt as string,
+    updatedAt: row.updatedAt as string,
+  };
+}
+
+function mapCoupon(row: Record<string, unknown>): Coupon {
+  return {
+    id: String(row.id),
+    businessId: row.businessId as string,
+    title: row.title as string,
+    description: row.description as string,
+    discountType: row.discountType as "percentage" | "fixed",
+    discountValue: toNum(row.discountValue),
+    couponCode: row.couponCode as string,
+    startDate: row.startDate as string,
+    endDate: row.endDate as string,
+    usageLimit: row.usageLimit != null ? toNum(row.usageLimit) : null,
+    usageCount: toNum(row.usageCount),
+    isActive: toBool(row.isActive),
+    isPremiumOnly: toBool(row.isPremiumOnly),
+    createdAt: row.createdAt as string,
+    updatedAt: row.updatedAt as string,
+  };
+}
+
+function mapRideshareRow(row: Record<string, unknown>): Rideshare {
+  return {
+    id: String(row.id),
+    creatorId: String(row.creator_id),
+    creatorName: row.creator_name as string,
+    driverId: row.driver_id != null ? String(row.driver_id) : null,
+    driverName: (row.driver_name as string) ?? null,
+    originName: row.origin_name as string,
+    originLat: toNum(row.origin_lat),
+    originLng: toNum(row.origin_lng),
+    destinationName: row.destination_name as string,
+    destinationLat: toNum(row.destination_lat),
+    destinationLng: toNum(row.destination_lng),
+    maxPassengers: toNum(row.max_passengers),
+    currentPassengers: toNum(row.current_passengers),
+    status: row.status as RideshareStatus,
+    note: (row.note as string) ?? null,
+    shareCode: (row.share_code as string) ?? "",
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+// ─── DatabaseManager ──────────────────────────────────────────────────────────
+
+class DatabaseManager {
+  private client: Client;
+  private initialized = false;
+
+  constructor() {
+    const url = process.env.DATABASE_URL || "file:database.sqlite";
+    const authToken = process.env.DATABASE_AUTH_TOKEN;
+    this.client = createClient({ url, authToken });
   }
 
-  private initializeTables(): void {
-    // Enable foreign keys
-    this.db.pragma("foreign_keys = ON");
+  /** Call once at server startup before handling requests. */
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    await this.initializeTables();
+    this.initialized = true;
+  }
 
-    // Create users table
-    this.db.exec(`
+  private async exec(sql: string): Promise<void> {
+    const statements = sql
+      .split(";")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    for (const stmt of statements) {
+      await this.client.execute(stmt);
+    }
+  }
+
+  private async initializeTables(): Promise<void> {
+    await this.client.execute("PRAGMA foreign_keys = ON");
+
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
@@ -111,17 +199,16 @@ class DatabaseManager {
         role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
         hashed_password TEXT,
         is_verified BOOLEAN DEFAULT FALSE,
+        is_premium BOOLEAN DEFAULT 0,
+        plan_type TEXT DEFAULT 'basic',
+        plan_expires_at DATETIME DEFAULT NULL,
+        stripe_subscription_id TEXT DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT email_or_google CHECK (
-          (google_id IS NOT NULL AND hashed_password IS NULL) OR
-          (google_id IS NULL AND hashed_password IS NOT NULL)
-        )
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Create sessions table for JWT blacklisting
-    this.db.exec(`
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -132,8 +219,7 @@ class DatabaseManager {
       )
     `);
 
-    // Create reviews table
-    this.db.exec(`
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         business_id TEXT NOT NULL,
@@ -147,8 +233,7 @@ class DatabaseManager {
       )
     `);
 
-    // Create review_helpful pivot table
-    this.db.exec(`
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS review_helpful (
         review_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
@@ -159,18 +244,26 @@ class DatabaseManager {
       )
     `);
 
-    // Create indexes for performance
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-      CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
-      CREATE INDEX IF NOT EXISTS idx_sessions_jti ON sessions(jti);
-      CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
-      CREATE INDEX IF NOT EXISTS idx_reviews_business ON reviews(business_id);
-      CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
-    `);
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_sessions_jti ON sessions(jti)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_reviews_business ON reviews(business_id)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id)`,
+    );
 
-    // Create coupons table
-    this.db.exec(`
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS coupons (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         business_id TEXT NOT NULL,
@@ -186,22 +279,24 @@ class DatabaseManager {
         is_active BOOLEAN DEFAULT 1,
         is_premium_only BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        CHECK (end_date > start_date),
-        CHECK (usage_limit IS NULL OR usage_count <= usage_limit)
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Create indexes for coupons
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(coupon_code);
-      CREATE INDEX IF NOT EXISTS idx_coupons_business ON coupons(business_id);
-      CREATE INDEX IF NOT EXISTS idx_coupons_end_date ON coupons(end_date);
-      CREATE INDEX IF NOT EXISTS idx_coupons_active ON coupons(is_active);
-    `);
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(coupon_code)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_coupons_business ON coupons(business_id)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_coupons_end_date ON coupons(end_date)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_coupons_active ON coupons(is_active)`,
+    );
 
-    // Photo cache: stores resolved Google Places photo URLs keyed by business
-    this.db.exec(`
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS business_photos (
         cache_key TEXT PRIMARY KEY,
         photo_url TEXT NOT NULL,
@@ -209,8 +304,7 @@ class DatabaseManager {
       )
     `);
 
-    // Create rideshares table
-    this.db.exec(`
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS rideshares (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         creator_id INTEGER NOT NULL,
@@ -224,6 +318,7 @@ class DatabaseManager {
         max_passengers INTEGER NOT NULL DEFAULT 4 CHECK (max_passengers >= 1 AND max_passengers <= 4),
         status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'accepted', 'in_transit', 'completed', 'cancelled')),
         note TEXT,
+        share_code TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (creator_id) REFERENCES users (id) ON DELETE CASCADE,
@@ -231,8 +326,7 @@ class DatabaseManager {
       )
     `);
 
-    // Create rideshare_passengers table
-    this.db.exec(`
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS rideshare_passengers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         rideshare_id INTEGER NOT NULL,
@@ -244,98 +338,60 @@ class DatabaseManager {
       )
     `);
 
-    // Add share_code column (migration for existing DBs)
-    // Note: SQLite ALTER TABLE cannot add columns with UNIQUE constraint;
-    // uniqueness is enforced via the UNIQUE INDEX created below instead.
-    try {
-      this.db.exec(`ALTER TABLE rideshares ADD COLUMN share_code TEXT`);
-    } catch {
-      // Column already exists — ignore
-    }
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_rideshares_status ON rideshares(status)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_rideshares_creator ON rideshares(creator_id)`,
+    );
+    await this.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_rideshares_share_code ON rideshares(share_code)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_rideshare ON rideshare_passengers(rideshare_id)`,
+    );
+    await this.exec(
+      `CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_user ON rideshare_passengers(user_id)`,
+    );
 
-    // Add is_premium column to users (migration for existing DBs)
-    try {
-      this.db.exec(`ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0`);
-    } catch {
-      // Column already exists — ignore
-    }
+    await this.client.execute(
+      "UPDATE users SET is_verified = 1 WHERE hashed_password IS NOT NULL AND is_verified = 0",
+    );
 
-    // Add plan_type and plan_expires_at columns (migration for existing DBs)
-    try {
-      this.db.exec(
-        `ALTER TABLE users ADD COLUMN plan_type TEXT DEFAULT 'basic'`,
-      );
-    } catch {
-      // Column already exists — ignore
-    }
-    try {
-      this.db.exec(
-        `ALTER TABLE users ADD COLUMN plan_expires_at DATETIME DEFAULT NULL`,
-      );
-    } catch {
-      // Column already exists — ignore
-    }
-    try {
-      this.db.exec(
-        `ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT DEFAULT NULL`,
-      );
-    } catch {
-      // Column already exists — ignore
-    }
-
-    // Create indexes for rideshares
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_rideshares_status ON rideshares(status);
-      CREATE INDEX IF NOT EXISTS idx_rideshares_creator ON rideshares(creator_id);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_rideshares_share_code ON rideshares(share_code);
-      CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_rideshare ON rideshare_passengers(rideshare_id);
-      CREATE INDEX IF NOT EXISTS idx_rideshare_passengers_user ON rideshare_passengers(user_id);
-    `);
-
-    // Migration: auto-verify all password-based users that were left unverified
-    // due to the updateUser boolean binding bug (better-sqlite3 rejects JS booleans).
-    // This app never sends real verification emails, so all local users should be verified.
-    this.db.exec(`
-      UPDATE users SET is_verified = 1
-      WHERE hashed_password IS NOT NULL AND is_verified = 0
-    `);
-
-    // Create the first admin user if no users exist
-    this.createDefaultAdmin();
+    await this.createDefaultAdmin();
   }
 
-  private createDefaultAdmin(): void {
-    const userCount = this.db
-      .prepare("SELECT COUNT(*) as count FROM users")
-      .get() as { count: number };
-
-    if (userCount.count === 0) {
+  private async createDefaultAdmin(): Promise<void> {
+    const result = await this.client.execute(
+      "SELECT COUNT(*) as count FROM users",
+    );
+    const count = toNum((result.rows[0] as any).count);
+    if (count === 0) {
       console.log("Creating default admin user...");
-      // Use synchronous bcrypt hash so the insertion is atomic with the rest
-      // of initializeTables (which runs in the constructor and cannot be async).
       const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || "12");
-      const hashedPassword = bcrypt.hashSync("admin123", saltRounds);
-      this.db
-        .prepare(
-          `INSERT INTO users (email, name, google_id, role, hashed_password, is_verified)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
+      const hashedPassword = await bcrypt.hash("admin123", saltRounds);
+      await this.client.execute({
+        sql: `INSERT INTO users (email, name, google_id, role, hashed_password, is_verified)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
           "admin@proximiti.local",
           "Administrator",
           null,
           "admin",
           hashedPassword,
           1,
-        );
+        ],
+      });
       console.log(
-        "Default admin user created. Email: admin@proximiti.local, Password: admin123",
+        "Default admin created. Email: admin@proximiti.local Password: admin123",
       );
       console.log(
         "IMPORTANT: Change the admin password immediately after first login!",
       );
     }
   }
+
+  // ─── User Methods ────────────────────────────────────────────────────────────
 
   async createUser(userData: {
     email: string;
@@ -353,465 +409,418 @@ class DatabaseManager {
       googleId,
       isVerified = false,
     } = userData;
-
     let hashedPassword: string | null = null;
     if (password && !googleId) {
       const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || "12");
       hashedPassword = await bcrypt.hash(password, saltRounds);
     }
-
-    const stmt = this.db.prepare(`
-      INSERT INTO users (email, name, google_id, role, hashed_password, is_verified)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
     try {
-      const result = stmt.run(
-        email,
-        name,
-        googleId ?? null,
-        role,
-        hashedPassword,
-        isVerified ? 1 : 0,
-      );
-      return this.getUserById(result.lastInsertRowid as number);
+      const result = await this.client.execute({
+        sql: `INSERT INTO users (email, name, google_id, role, hashed_password, is_verified)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          email,
+          name,
+          googleId ?? null,
+          role,
+          hashedPassword,
+          isVerified ? 1 : 0,
+        ],
+      });
+      return this.getUserById(toNum(result.lastInsertRowid));
     } catch (error: any) {
-      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      if (error.message?.includes("UNIQUE constraint failed")) {
         throw new Error("User with this email already exists");
       }
       throw error;
     }
   }
 
-  getUserById(id: number): User {
-    const stmt = this.db.prepare(`
-      SELECT id, email, name, google_id as googleId, role, 
-             hashed_password as hashedPassword, is_verified as isVerified,
-             is_premium as isPremium,
-             plan_type as planType, plan_expires_at as planExpiresAt,
-             stripe_subscription_id as stripeSubscriptionId,
-             created_at as createdAt, updated_at as updatedAt
-      FROM users WHERE id = ?
-    `);
-    const user = stmt.get(id) as DatabaseUser | undefined;
-    if (!user) {
-      throw new Error("User not found");
-    }
-    return {
-      ...user,
-      id: user.id.toString(),
-      isPremium: Boolean(user.isPremium),
-      planType: (user.planType || "basic") as
-        | "basic"
-        | "essential"
-        | "enterprise",
-      planExpiresAt: user.planExpiresAt ?? null,
-    };
+  async getUserById(id: number): Promise<User> {
+    const result = await this.client.execute({
+      sql: `SELECT id, email, name, google_id as googleId, role,
+                   hashed_password as hashedPassword, is_verified as isVerified,
+                   is_premium as isPremium, plan_type as planType,
+                   plan_expires_at as planExpiresAt,
+                   stripe_subscription_id as stripeSubscriptionId,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM users WHERE id = ?`,
+      args: [id],
+    });
+    if (!result.rows[0]) throw new Error("User not found");
+    return mapUser(result.rows[0] as Record<string, unknown>);
   }
 
-  getUserByEmail(email: string): User | null {
-    const stmt = this.db.prepare(`
-      SELECT id, email, name, google_id as googleId, role,
-             hashed_password as hashedPassword, is_verified as isVerified,
-             is_premium as isPremium,
-             plan_type as planType, plan_expires_at as planExpiresAt,
-             stripe_subscription_id as stripeSubscriptionId,
-             created_at as createdAt, updated_at as updatedAt
-      FROM users WHERE email = ?
-    `);
-    const user = stmt.get(email) as DatabaseUser | undefined;
-    return user
-      ? {
-          ...user,
-          id: user.id.toString(),
-          isPremium: Boolean(user.isPremium),
-          planType: (user.planType || "basic") as
-            | "basic"
-            | "essential"
-            | "enterprise",
-          planExpiresAt: user.planExpiresAt ?? null,
-        }
-      : null;
+  async getUserByEmail(email: string): Promise<User | null> {
+    const result = await this.client.execute({
+      sql: `SELECT id, email, name, google_id as googleId, role,
+                   hashed_password as hashedPassword, is_verified as isVerified,
+                   is_premium as isPremium, plan_type as planType,
+                   plan_expires_at as planExpiresAt,
+                   stripe_subscription_id as stripeSubscriptionId,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM users WHERE email = ?`,
+      args: [email],
+    });
+    if (!result.rows[0]) return null;
+    return mapUser(result.rows[0] as Record<string, unknown>);
   }
 
-  getUserByGoogleId(googleId: string): User | null {
-    const stmt = this.db.prepare(`
-      SELECT id, email, name, google_id as googleId, role,
-             hashed_password as hashedPassword, is_verified as isVerified,
-             is_premium as isPremium,
-             plan_type as planType, plan_expires_at as planExpiresAt,
-             stripe_subscription_id as stripeSubscriptionId,
-             created_at as createdAt, updated_at as updatedAt
-      FROM users WHERE google_id = ?
-    `);
-    const user = stmt.get(googleId) as DatabaseUser | undefined;
-    return user
-      ? {
-          ...user,
-          id: user.id.toString(),
-          isPremium: Boolean(user.isPremium),
-          planType: (user.planType || "basic") as
-            | "basic"
-            | "essential"
-            | "enterprise",
-          planExpiresAt: user.planExpiresAt ?? null,
-        }
-      : null;
+  async getUserByGoogleId(googleId: string): Promise<User | null> {
+    const result = await this.client.execute({
+      sql: `SELECT id, email, name, google_id as googleId, role,
+                   hashed_password as hashedPassword, is_verified as isVerified,
+                   is_premium as isPremium, plan_type as planType,
+                   plan_expires_at as planExpiresAt,
+                   stripe_subscription_id as stripeSubscriptionId,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM users WHERE google_id = ?`,
+      args: [googleId],
+    });
+    if (!result.rows[0]) return null;
+    return mapUser(result.rows[0] as Record<string, unknown>);
   }
 
-  getAllUsers(limit: number = 100, offset: number = 0): User[] {
-    const stmt = this.db.prepare(`
-      SELECT id, email, name, google_id as googleId, role,
-             hashed_password as hashedPassword, is_verified as isVerified,
-             is_premium as isPremium,
-             plan_type as planType, plan_expires_at as planExpiresAt,
-             stripe_subscription_id as stripeSubscriptionId,
-             created_at as createdAt, updated_at as updatedAt
-      FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
-    `);
-    const users = stmt.all(limit, offset) as DatabaseUser[];
-    return users.map((user) => ({
-      ...user,
-      id: user.id.toString(),
-      isPremium: Boolean(user.isPremium),
-      planType: (user.planType || "basic") as
-        | "basic"
-        | "essential"
-        | "enterprise",
-      planExpiresAt: user.planExpiresAt ?? null,
-    }));
+  async getAllUsers(limit = 100, offset = 0): Promise<User[]> {
+    const result = await this.client.execute({
+      sql: `SELECT id, email, name, google_id as googleId, role,
+                   hashed_password as hashedPassword, is_verified as isVerified,
+                   is_premium as isPremium, plan_type as planType,
+                   plan_expires_at as planExpiresAt,
+                   stripe_subscription_id as stripeSubscriptionId,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      args: [limit, offset],
+    });
+    return (result.rows as unknown as Record<string, unknown>[]).map(mapUser);
   }
 
   async verifyPassword(email: string, password: string): Promise<User | null> {
-    const user = this.getUserByEmail(email);
-    if (!user || !user.hashedPassword) {
-      return null;
-    }
-
+    const user = await this.getUserByEmail(email);
+    if (!user || !user.hashedPassword) return null;
     const isValid = await bcrypt.compare(password, user.hashedPassword);
     return isValid ? user : null;
   }
 
-  updateUser(id: string, updates: Partial<Omit<User, "id">>): User {
+  async updateUser(
+    id: string,
+    updates: Partial<Omit<User, "id">>,
+  ): Promise<User> {
     const fields: string[] = [];
-    const values: any[] = [];
-
+    const values: (string | number | boolean | null | bigint | Date)[] = [];
     Object.entries(updates).forEach(([key, value]) => {
       if (value !== undefined) {
-        // Convert camelCase to snake_case
         const dbKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
         fields.push(`${dbKey} = ?`);
-        // better-sqlite3 does not accept JS booleans — coerce to 0/1
         values.push(typeof value === "boolean" ? (value ? 1 : 0) : value);
       }
     });
-
-    if (fields.length === 0) {
-      throw new Error("No valid fields to update");
-    }
-
+    if (fields.length === 0) throw new Error("No valid fields to update");
     fields.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
-
-    const stmt = this.db.prepare(`
-      UPDATE users SET ${fields.join(", ")} WHERE id = ?
-    `);
-
-    stmt.run(...values);
+    await this.client.execute({
+      sql: `UPDATE users SET ${fields.join(", ")} WHERE id = ?`,
+      args: values,
+    });
     return this.getUserById(parseInt(id));
   }
 
-  deleteUser(id: string): boolean {
-    const stmt = this.db.prepare("DELETE FROM users WHERE id = ?");
-    const result = stmt.run(id);
-    return result.changes > 0;
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await this.client.execute({
+      sql: "DELETE FROM users WHERE id = ?",
+      args: [id],
+    });
+    return result.rowsAffected > 0;
   }
 
-  setPremiumStatus(
+  async setPremiumStatus(
     id: string,
     isPremium: boolean,
     planType: "basic" | "essential" | "enterprise" = "basic",
     planExpiresAt: string | null = null,
     stripeSubscriptionId: string | null = null,
-  ): User {
-    const stmt = this.db.prepare(`
-      UPDATE users
-      SET is_premium = ?, plan_type = ?, plan_expires_at = ?,
-          stripe_subscription_id = COALESCE(?, stripe_subscription_id),
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-    stmt.run(
-      isPremium ? 1 : 0,
-      planType,
-      planExpiresAt,
-      stripeSubscriptionId,
-      id,
-    );
+  ): Promise<User> {
+    await this.client.execute({
+      sql: `UPDATE users
+            SET is_premium = ?, plan_type = ?, plan_expires_at = ?,
+                stripe_subscription_id = COALESCE(?, stripe_subscription_id),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?`,
+      args: [
+        isPremium ? 1 : 0,
+        planType,
+        planExpiresAt,
+        stripeSubscriptionId,
+        id,
+      ],
+    });
     return this.getUserById(parseInt(id));
   }
 
-  setStripeSubscriptionId(id: string, subscriptionId: string | null): void {
-    const stmt = this.db.prepare(`
-      UPDATE users SET stripe_subscription_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `);
-    stmt.run(subscriptionId, id);
+  async setStripeSubscriptionId(
+    id: string,
+    subscriptionId: string | null,
+  ): Promise<void> {
+    await this.client.execute({
+      sql: "UPDATE users SET stripe_subscription_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      args: [subscriptionId, id],
+    });
   }
 
-  clearPremiumStatus(id: string): User {
-    const stmt = this.db.prepare(`
-      UPDATE users
-      SET is_premium = 0, plan_type = 'basic', plan_expires_at = NULL,
-          stripe_subscription_id = NULL, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-    stmt.run(id);
+  async clearPremiumStatus(id: string): Promise<User> {
+    await this.client.execute({
+      sql: `UPDATE users
+            SET is_premium = 0, plan_type = 'basic', plan_expires_at = NULL,
+                stripe_subscription_id = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?`,
+      args: [id],
+    });
     return this.getUserById(parseInt(id));
   }
 
-  // Session management for JWT blacklisting
-  createSession(userId: string, jti: string, expiresAt: Date): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO sessions (user_id, jti, expires_at)
-      VALUES (?, ?, datetime(?))
-    `);
-    stmt.run(userId, jti, expiresAt.toISOString());
+  // ─── Session Management ──────────────────────────────────────────────────────
+
+  async createSession(
+    userId: string,
+    jti: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    await this.client.execute({
+      sql: "INSERT INTO sessions (user_id, jti, expires_at) VALUES (?, ?, datetime(?))",
+      args: [userId, jti, expiresAt.toISOString()],
+    });
   }
 
-  isSessionValid(jti: string): boolean {
-    const stmt = this.db.prepare(`
-      SELECT id FROM sessions 
-      WHERE jti = ? AND expires_at > datetime('now')
-    `);
-    const session = stmt.get(jti);
-    return !!session;
+  async isSessionValid(jti: string): Promise<boolean> {
+    const result = await this.client.execute({
+      sql: "SELECT id FROM sessions WHERE jti = ? AND expires_at > datetime('now')",
+      args: [jti],
+    });
+    return result.rows.length > 0;
   }
 
-  revokeSession(jti: string): void {
-    const stmt = this.db.prepare("DELETE FROM sessions WHERE jti = ?");
-    stmt.run(jti);
+  async revokeSession(jti: string): Promise<void> {
+    await this.client.execute({
+      sql: "DELETE FROM sessions WHERE jti = ?",
+      args: [jti],
+    });
   }
 
-  revokeAllUserSessions(userId: string): void {
-    const stmt = this.db.prepare("DELETE FROM sessions WHERE user_id = ?");
-    stmt.run(userId);
+  async revokeAllUserSessions(userId: string): Promise<void> {
+    await this.client.execute({
+      sql: "DELETE FROM sessions WHERE user_id = ?",
+      args: [userId],
+    });
   }
 
-  // Clean up expired sessions
-  cleanupExpiredSessions(): void {
-    const stmt = this.db.prepare(
+  async cleanupExpiredSessions(): Promise<void> {
+    const result = await this.client.execute(
       "DELETE FROM sessions WHERE expires_at <= datetime('now')",
     );
-    const result = stmt.run();
-    if (result.changes > 0) {
-      console.log(`Cleaned up ${result.changes} expired sessions`);
-    }
+    if (result.rowsAffected > 0)
+      console.log(`Cleaned up ${result.rowsAffected} expired sessions`);
   }
 
-  // ─── Review Methods ────────────────────────────────────────────────────────
+  // ─── Review Methods ──────────────────────────────────────────────────────────
 
-  createReview(
+  async createReview(
     businessId: string,
     userId: string,
     rating: number,
     text: string,
-  ): Review {
-    const stmt = this.db.prepare(`
-      INSERT INTO reviews (business_id, user_id, rating, text)
-      VALUES (?, ?, ?, ?)
-    `);
+  ): Promise<Review> {
     try {
-      const result = stmt.run(businessId, userId, rating, text);
-      return this.getReviewById(result.lastInsertRowid as number);
+      const result = await this.client.execute({
+        sql: "INSERT INTO reviews (business_id, user_id, rating, text) VALUES (?, ?, ?, ?)",
+        args: [businessId, userId, rating, text],
+      });
+      return this.getReviewById(toNum(result.lastInsertRowid));
     } catch (error: any) {
-      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      if (error.message?.includes("UNIQUE constraint failed")) {
         throw new Error("You have already reviewed this business");
       }
       throw error;
     }
   }
 
-  getReviewById(id: number, requestingUserId?: string): Review {
-    const row = this.db
-      .prepare(
-        `
-      SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
-             r.rating, r.text, r.helpful_count, r.created_at
-      FROM reviews r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.id = ?
-    `,
-      )
-      .get(id) as any;
+  async getReviewById(id: number, requestingUserId?: string): Promise<Review> {
+    const result = await this.client.execute({
+      sql: `SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
+                   r.rating, r.text, r.helpful_count, r.created_at
+            FROM reviews r JOIN users u ON u.id = r.user_id WHERE r.id = ?`,
+      args: [id],
+    });
+    const row = result.rows[0] as any;
     if (!row) throw new Error("Review not found");
-
     let userFoundHelpful = false;
     if (requestingUserId) {
-      const h = this.db
-        .prepare(
-          "SELECT 1 FROM review_helpful WHERE review_id = ? AND user_id = ?",
-        )
-        .get(id, requestingUserId);
-      userFoundHelpful = !!h;
+      const h = await this.client.execute({
+        sql: "SELECT 1 FROM review_helpful WHERE review_id = ? AND user_id = ?",
+        args: [id, requestingUserId],
+      });
+      userFoundHelpful = h.rows.length > 0;
     }
-
     return {
-      id: row.id.toString(),
-      businessId: row.business_id,
-      userId: row.user_id.toString(),
-      userName: row.user_name,
-      userEmail: row.user_email,
-      rating: row.rating,
-      text: row.text,
-      helpfulCount: row.helpful_count,
+      id: String(row.id),
+      businessId: row.business_id as string,
+      userId: String(row.user_id),
+      userName: row.user_name as string,
+      userEmail: row.user_email as string,
+      rating: toNum(row.rating),
+      text: row.text as string,
+      helpfulCount: toNum(row.helpful_count),
       userFoundHelpful,
-      createdAt: row.created_at,
+      createdAt: row.created_at as string,
     };
   }
 
-  getReviewsForBusiness(
+  async getReviewsForBusiness(
     businessId: string,
-    limit: number = 10,
-    offset: number = 0,
+    limit = 10,
+    offset = 0,
     requestingUserId?: string,
-  ): { reviews: Review[]; total: number } {
-    const total = (
-      this.db
-        .prepare("SELECT COUNT(*) as count FROM reviews WHERE business_id = ?")
-        .get(businessId) as { count: number }
-    ).count;
+  ): Promise<{ reviews: Review[]; total: number }> {
+    const countResult = await this.client.execute({
+      sql: "SELECT COUNT(*) as count FROM reviews WHERE business_id = ?",
+      args: [businessId],
+    });
+    const total = toNum((countResult.rows[0] as any).count);
 
-    const rows = this.db
-      .prepare(
-        `
-      SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
-             r.rating, r.text, r.helpful_count, r.created_at
-      FROM reviews r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.business_id = ?
-      ORDER BY r.helpful_count DESC, r.created_at DESC
-      LIMIT ? OFFSET ?
-    `,
-      )
-      .all(businessId, limit, offset) as any[];
+    const rowsResult = await this.client.execute({
+      sql: `SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
+                   r.rating, r.text, r.helpful_count, r.created_at
+            FROM reviews r JOIN users u ON u.id = r.user_id
+            WHERE r.business_id = ?
+            ORDER BY r.helpful_count DESC, r.created_at DESC
+            LIMIT ? OFFSET ?`,
+      args: [businessId, limit, offset],
+    });
+    const rows = rowsResult.rows as any[];
 
     const helpfulSet = new Set<number>();
     if (requestingUserId && rows.length > 0) {
-      const ids = rows.map((r: any) => r.id);
+      const ids = rows.map((r) => r.id as number | bigint);
       const placeholders = ids.map(() => "?").join(",");
-      const helpful = this.db
-        .prepare(
-          `SELECT review_id FROM review_helpful WHERE user_id = ? AND review_id IN (${placeholders})`,
-        )
-        .all(requestingUserId, ...ids) as { review_id: number }[];
-      helpful.forEach((h) => helpfulSet.add(h.review_id));
+      const helpfulResult = await this.client.execute({
+        sql: `SELECT review_id FROM review_helpful WHERE user_id = ? AND review_id IN (${placeholders})`,
+        args: [requestingUserId, ...ids],
+      });
+      (helpfulResult.rows as any[]).forEach((h) =>
+        helpfulSet.add(toNum(h.review_id)),
+      );
     }
 
-    const reviews: Review[] = rows.map((row: any) => ({
-      id: row.id.toString(),
-      businessId: row.business_id,
-      userId: row.user_id.toString(),
-      userName: row.user_name,
-      userEmail: row.user_email,
-      rating: row.rating,
-      text: row.text,
-      helpfulCount: row.helpful_count,
-      userFoundHelpful: helpfulSet.has(row.id),
-      createdAt: row.created_at,
+    const reviews: Review[] = rows.map((row) => ({
+      id: String(row.id),
+      businessId: row.business_id as string,
+      userId: String(row.user_id),
+      userName: row.user_name as string,
+      userEmail: row.user_email as string,
+      rating: toNum(row.rating),
+      text: row.text as string,
+      helpfulCount: toNum(row.helpful_count),
+      userFoundHelpful: helpfulSet.has(toNum(row.id)),
+      createdAt: row.created_at as string,
     }));
 
     return { reviews, total };
   }
 
-  getUserReviewForBusiness(businessId: string, userId: string): Review | null {
-    const row = this.db
-      .prepare(
-        `
-      SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
-             r.rating, r.text, r.helpful_count, r.created_at
-      FROM reviews r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.business_id = ? AND r.user_id = ?
-    `,
-      )
-      .get(businessId, userId) as any;
+  async getUserReviewForBusiness(
+    businessId: string,
+    userId: string,
+  ): Promise<Review | null> {
+    const result = await this.client.execute({
+      sql: `SELECT r.id, r.business_id, r.user_id, u.name as user_name, u.email as user_email,
+                   r.rating, r.text, r.helpful_count, r.created_at
+            FROM reviews r JOIN users u ON u.id = r.user_id
+            WHERE r.business_id = ? AND r.user_id = ?`,
+      args: [businessId, userId],
+    });
+    const row = result.rows[0] as any;
     if (!row) return null;
     return {
-      id: row.id.toString(),
-      businessId: row.business_id,
-      userId: row.user_id.toString(),
-      userName: row.user_name,
-      userEmail: row.user_email,
-      rating: row.rating,
-      text: row.text,
-      helpfulCount: row.helpful_count,
+      id: String(row.id),
+      businessId: row.business_id as string,
+      userId: String(row.user_id),
+      userName: row.user_name as string,
+      userEmail: row.user_email as string,
+      rating: toNum(row.rating),
+      text: row.text as string,
+      helpfulCount: toNum(row.helpful_count),
       userFoundHelpful: false,
-      createdAt: row.created_at,
+      createdAt: row.created_at as string,
     };
   }
 
-  getProximitiReviewCount(businessId: string): number {
-    const result = this.db
-      .prepare("SELECT COUNT(*) as count FROM reviews WHERE business_id = ?")
-      .get(businessId) as { count: number };
-    return result.count;
+  async getProximitiReviewCount(businessId: string): Promise<number> {
+    const result = await this.client.execute({
+      sql: "SELECT COUNT(*) as count FROM reviews WHERE business_id = ?",
+      args: [businessId],
+    });
+    return toNum((result.rows[0] as any).count);
   }
 
-  /** Toggle helpful – returns new state (true = now helpful) */
-  toggleHelpful(reviewId: string, userId: string): boolean {
-    const existing = this.db
-      .prepare(
-        "SELECT 1 FROM review_helpful WHERE review_id = ? AND user_id = ?",
-      )
-      .get(reviewId, userId);
-
-    if (existing) {
-      this.db
-        .prepare(
-          "DELETE FROM review_helpful WHERE review_id = ? AND user_id = ?",
-        )
-        .run(reviewId, userId);
-      this.db
-        .prepare(
-          "UPDATE reviews SET helpful_count = helpful_count - 1 WHERE id = ?",
-        )
-        .run(reviewId);
+  async toggleHelpful(reviewId: string, userId: string): Promise<boolean> {
+    const existing = await this.client.execute({
+      sql: "SELECT 1 FROM review_helpful WHERE review_id = ? AND user_id = ?",
+      args: [reviewId, userId],
+    });
+    if (existing.rows.length > 0) {
+      await this.client.batch(
+        [
+          {
+            sql: "DELETE FROM review_helpful WHERE review_id = ? AND user_id = ?",
+            args: [reviewId, userId],
+          },
+          {
+            sql: "UPDATE reviews SET helpful_count = helpful_count - 1 WHERE id = ?",
+            args: [reviewId],
+          },
+        ],
+        "write",
+      );
       return false;
     } else {
-      this.db
-        .prepare(
-          "INSERT INTO review_helpful (review_id, user_id) VALUES (?, ?)",
-        )
-        .run(reviewId, userId);
-      this.db
-        .prepare(
-          "UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?",
-        )
-        .run(reviewId);
+      await this.client.batch(
+        [
+          {
+            sql: "INSERT INTO review_helpful (review_id, user_id) VALUES (?, ?)",
+            args: [reviewId, userId],
+          },
+          {
+            sql: "UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?",
+            args: [reviewId],
+          },
+        ],
+        "write",
+      );
       return true;
     }
   }
 
-  // ─── Photo cache ─────────────────────────────────────────────────────────────
+  // ─── Photo Cache ─────────────────────────────────────────────────────────────
 
-  cachePhoto(key: string, photoUrl: string): void {
-    this.db
-      .prepare(
-        "INSERT OR REPLACE INTO business_photos (cache_key, photo_url) VALUES (?, ?)",
-      )
-      .run(key, photoUrl);
+  async cachePhoto(key: string, photoUrl: string): Promise<void> {
+    await this.client.execute({
+      sql: "INSERT OR REPLACE INTO business_photos (cache_key, photo_url) VALUES (?, ?)",
+      args: [key, photoUrl],
+    });
   }
 
-  getCachedPhoto(key: string): string | null {
-    const row = this.db
-      .prepare("SELECT photo_url FROM business_photos WHERE cache_key = ?")
-      .get(key) as { photo_url: string } | undefined;
-    return row?.photo_url ?? null;
+  async getCachedPhoto(key: string): Promise<string | null> {
+    const result = await this.client.execute({
+      sql: "SELECT photo_url FROM business_photos WHERE cache_key = ?",
+      args: [key],
+    });
+    return result.rows.length > 0
+      ? ((result.rows[0] as any).photo_url as string)
+      : null;
   }
 
   // ─── Coupon Methods ──────────────────────────────────────────────────────────
 
-  createCoupon(couponData: {
+  async createCoupon(couponData: {
     businessId: string;
     title: string;
     description: string;
@@ -822,7 +831,7 @@ class DatabaseManager {
     endDate: Date;
     usageLimit?: number;
     isPremiumOnly?: boolean;
-  }): Coupon {
+  }): Promise<Coupon> {
     const {
       businessId,
       title,
@@ -835,163 +844,120 @@ class DatabaseManager {
       usageLimit,
       isPremiumOnly,
     } = couponData;
-
-    // Validate dates
-    if (endDate <= startDate) {
+    if (endDate <= startDate)
       throw new Error("End date must be after start date");
-    }
-
-    // Validate discount value
-    if (discountValue <= 0) {
-      throw new Error("Discount value must be positive");
-    }
-
-    if (discountType === "percentage" && discountValue > 100) {
+    if (discountValue <= 0) throw new Error("Discount value must be positive");
+    if (discountType === "percentage" && discountValue > 100)
       throw new Error("Percentage discount cannot exceed 100%");
-    }
-
-    const stmt = this.db.prepare(`
-      INSERT INTO coupons (
-        business_id, title, description, discount_type, discount_value,
-        coupon_code, start_date, end_date, usage_limit, is_premium_only
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
     try {
-      const result = stmt.run(
-        businessId,
-        title,
-        description,
-        discountType,
-        discountValue,
-        couponCode.toUpperCase(),
-        startDate.toISOString(),
-        endDate.toISOString(),
-        usageLimit ?? null,
-        isPremiumOnly ? 1 : 0,
-      );
-      return this.getCouponById(result.lastInsertRowid as number);
+      const result = await this.client.execute({
+        sql: `INSERT INTO coupons (
+                business_id, title, description, discount_type, discount_value,
+                coupon_code, start_date, end_date, usage_limit, is_premium_only
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          businessId,
+          title,
+          description,
+          discountType,
+          discountValue,
+          couponCode.toUpperCase(),
+          startDate.toISOString(),
+          endDate.toISOString(),
+          usageLimit ?? null,
+          isPremiumOnly ? 1 : 0,
+        ],
+      });
+      return this.getCouponById(toNum(result.lastInsertRowid));
     } catch (error: any) {
-      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      if (error.message?.includes("UNIQUE constraint failed"))
         throw new Error("Coupon code already exists");
-      }
       throw error;
     }
   }
 
-  getCouponById(id: number): Coupon {
-    const stmt = this.db.prepare(`
-      SELECT id, business_id as businessId, title, description,
-             discount_type as discountType, discount_value as discountValue,
-             coupon_code as couponCode, start_date as startDate,
-             end_date as endDate, usage_limit as usageLimit,
-             usage_count as usageCount, is_active as isActive,
-             is_premium_only as isPremiumOnly,
-             created_at as createdAt, updated_at as updatedAt
-      FROM coupons WHERE id = ?
-    `);
-    const coupon = stmt.get(id) as any;
-    if (!coupon) {
-      throw new Error("Coupon not found");
-    }
-    return {
-      ...coupon,
-      id: coupon.id.toString(),
-      isActive: Boolean(coupon.isActive),
-      isPremiumOnly: Boolean(coupon.isPremiumOnly),
-    };
+  async getCouponById(id: number): Promise<Coupon> {
+    const result = await this.client.execute({
+      sql: `SELECT id, business_id as businessId, title, description,
+                   discount_type as discountType, discount_value as discountValue,
+                   coupon_code as couponCode, start_date as startDate,
+                   end_date as endDate, usage_limit as usageLimit,
+                   usage_count as usageCount, is_active as isActive,
+                   is_premium_only as isPremiumOnly,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM coupons WHERE id = ?`,
+      args: [id],
+    });
+    if (!result.rows[0]) throw new Error("Coupon not found");
+    return mapCoupon(result.rows[0] as Record<string, unknown>);
   }
 
-  getCouponByCode(couponCode: string): Coupon | null {
-    const stmt = this.db.prepare(`
-      SELECT id, business_id as businessId, title, description,
-             discount_type as discountType, discount_value as discountValue,
-             coupon_code as couponCode, start_date as startDate,
-             end_date as endDate, usage_limit as usageLimit,
-             usage_count as usageCount, is_active as isActive,
-             is_premium_only as isPremiumOnly,
-             created_at as createdAt, updated_at as updatedAt
-      FROM coupons WHERE coupon_code = ?
-    `);
-    const coupon = stmt.get(couponCode.toUpperCase()) as any;
-    if (!coupon) return null;
-    return {
-      ...coupon,
-      id: coupon.id.toString(),
-      isActive: Boolean(coupon.isActive),
-      isPremiumOnly: Boolean(coupon.isPremiumOnly),
-    };
+  async getCouponByCode(couponCode: string): Promise<Coupon | null> {
+    const result = await this.client.execute({
+      sql: `SELECT id, business_id as businessId, title, description,
+                   discount_type as discountType, discount_value as discountValue,
+                   coupon_code as couponCode, start_date as startDate,
+                   end_date as endDate, usage_limit as usageLimit,
+                   usage_count as usageCount, is_active as isActive,
+                   is_premium_only as isPremiumOnly,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM coupons WHERE coupon_code = ?`,
+      args: [couponCode.toUpperCase()],
+    });
+    if (!result.rows[0]) return null;
+    return mapCoupon(result.rows[0] as Record<string, unknown>);
   }
 
-  getActiveCouponsForBusiness(businessId: string): Coupon[] {
-    const stmt = this.db.prepare(`
-      SELECT id, business_id as businessId, title, description,
-             discount_type as discountType, discount_value as discountValue,
-             coupon_code as couponCode, start_date as startDate,
-             end_date as endDate, usage_limit as usageLimit,
-             usage_count as usageCount, is_active as isActive,
-             is_premium_only as isPremiumOnly,
-             created_at as createdAt, updated_at as updatedAt
-      FROM coupons 
-      WHERE business_id = ? 
-        AND is_active = 1
-        AND datetime(start_date) <= datetime('now')
-        AND datetime(end_date) >= datetime('now')
-      ORDER BY end_date ASC
-    `);
-    const coupons = stmt.all(businessId) as any[];
-    return coupons.map((c) => ({
-      ...c,
-      id: c.id.toString(),
-      isActive: Boolean(c.isActive),
-      isPremiumOnly: Boolean(c.isPremiumOnly),
-    }));
+  async getActiveCouponsForBusiness(businessId: string): Promise<Coupon[]> {
+    const result = await this.client.execute({
+      sql: `SELECT id, business_id as businessId, title, description,
+                   discount_type as discountType, discount_value as discountValue,
+                   coupon_code as couponCode, start_date as startDate,
+                   end_date as endDate, usage_limit as usageLimit,
+                   usage_count as usageCount, is_active as isActive,
+                   is_premium_only as isPremiumOnly,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM coupons
+            WHERE business_id = ? AND is_active = 1
+              AND datetime(start_date) <= datetime('now')
+              AND datetime(end_date) >= datetime('now')
+            ORDER BY end_date ASC`,
+      args: [businessId],
+    });
+    return (result.rows as unknown as Record<string, unknown>[]).map(mapCoupon);
   }
 
-  getAllCouponsForBusiness(businessId: string): Coupon[] {
-    const stmt = this.db.prepare(`
-      SELECT id, business_id as businessId, title, description,
-             discount_type as discountType, discount_value as discountValue,
-             coupon_code as couponCode, start_date as startDate,
-             end_date as endDate, usage_limit as usageLimit,
-             usage_count as usageCount, is_active as isActive,
-             is_premium_only as isPremiumOnly,
-             created_at as createdAt, updated_at as updatedAt
-      FROM coupons 
-      WHERE business_id = ?
-      ORDER BY created_at DESC
-    `);
-    const coupons = stmt.all(businessId) as any[];
-    return coupons.map((c) => ({
-      ...c,
-      id: c.id.toString(),
-      isActive: Boolean(c.isActive),
-      isPremiumOnly: Boolean(c.isPremiumOnly),
-    }));
+  async getAllCouponsForBusiness(businessId: string): Promise<Coupon[]> {
+    const result = await this.client.execute({
+      sql: `SELECT id, business_id as businessId, title, description,
+                   discount_type as discountType, discount_value as discountValue,
+                   coupon_code as couponCode, start_date as startDate,
+                   end_date as endDate, usage_limit as usageLimit,
+                   usage_count as usageCount, is_active as isActive,
+                   is_premium_only as isPremiumOnly,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM coupons WHERE business_id = ? ORDER BY created_at DESC`,
+      args: [businessId],
+    });
+    return (result.rows as unknown as Record<string, unknown>[]).map(mapCoupon);
   }
 
-  getAllCoupons(): Coupon[] {
-    const stmt = this.db.prepare(`
-      SELECT id, business_id as businessId, title, description,
-             discount_type as discountType, discount_value as discountValue,
-             coupon_code as couponCode, start_date as startDate,
-             end_date as endDate, usage_limit as usageLimit,
-             usage_count as usageCount, is_active as isActive,
-             is_premium_only as isPremiumOnly,
-             created_at as createdAt, updated_at as updatedAt
-      FROM coupons 
-      ORDER BY created_at DESC
-    `);
-    const coupons = stmt.all() as any[];
-    return coupons.map((c) => ({
-      ...c,
-      id: c.id.toString(),
-      isActive: Boolean(c.isActive),
-      isPremiumOnly: Boolean(c.isPremiumOnly),
-    }));
+  async getAllCoupons(): Promise<Coupon[]> {
+    const result = await this.client.execute({
+      sql: `SELECT id, business_id as businessId, title, description,
+                   discount_type as discountType, discount_value as discountValue,
+                   coupon_code as couponCode, start_date as startDate,
+                   end_date as endDate, usage_limit as usageLimit,
+                   usage_count as usageCount, is_active as isActive,
+                   is_premium_only as isPremiumOnly,
+                   created_at as createdAt, updated_at as updatedAt
+            FROM coupons ORDER BY created_at DESC`,
+      args: [],
+    });
+    return (result.rows as unknown as Record<string, unknown>[]).map(mapCoupon);
   }
 
-  updateCoupon(
+  async updateCoupon(
     id: string,
     updates: Partial<
       Omit<
@@ -999,16 +965,12 @@ class DatabaseManager {
         "id" | "couponCode" | "usageCount" | "createdAt" | "updatedAt"
       >
     >,
-  ): Coupon {
+  ): Promise<Coupon> {
     const fields: string[] = [];
-    const values: any[] = [];
-
+    const values: (string | number | boolean | null | bigint | Date)[] = [];
     Object.entries(updates).forEach(([key, value]) => {
       if (value !== undefined) {
-        // Convert camelCase to snake_case
         const dbKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
-
-        // Handle date conversions
         if (key === "startDate" || key === "endDate") {
           fields.push(`${dbKey} = ?`);
           values.push(new Date(value as string).toISOString());
@@ -1018,104 +980,70 @@ class DatabaseManager {
         }
       }
     });
-
-    if (fields.length === 0) {
-      throw new Error("No valid fields to update");
-    }
-
+    if (fields.length === 0) throw new Error("No valid fields to update");
     fields.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
-
-    const stmt = this.db.prepare(`
-      UPDATE coupons SET ${fields.join(", ")} WHERE id = ?
-    `);
-
-    stmt.run(...values);
+    await this.client.execute({
+      sql: `UPDATE coupons SET ${fields.join(", ")} WHERE id = ?`,
+      args: values,
+    });
     return this.getCouponById(parseInt(id));
   }
 
-  deleteCoupon(id: string): boolean {
-    const stmt = this.db.prepare("DELETE FROM coupons WHERE id = ?");
-    const result = stmt.run(id);
-    return result.changes > 0;
+  async deleteCoupon(id: string): Promise<boolean> {
+    const result = await this.client.execute({
+      sql: "DELETE FROM coupons WHERE id = ?",
+      args: [id],
+    });
+    return result.rowsAffected > 0;
   }
 
-  redeemCoupon(couponCode: string): {
-    success: boolean;
-    coupon?: Coupon;
-    error?: string;
-  } {
-    const coupon = this.getCouponByCode(couponCode);
-
-    if (!coupon) {
-      return { success: false, error: "Coupon not found" };
-    }
-
-    if (!coupon.isActive) {
+  async redeemCoupon(
+    couponCode: string,
+  ): Promise<{ success: boolean; coupon?: Coupon; error?: string }> {
+    const coupon = await this.getCouponByCode(couponCode);
+    if (!coupon) return { success: false, error: "Coupon not found" };
+    if (!coupon.isActive)
       return { success: false, error: "Coupon is not active" };
-    }
-
     const now = new Date();
-    const startDate = new Date(coupon.startDate);
-    const endDate = new Date(coupon.endDate);
-
-    if (now < startDate) {
+    if (now < new Date(coupon.startDate))
       return { success: false, error: "Coupon is not yet valid" };
-    }
-
-    if (now > endDate) {
+    if (now > new Date(coupon.endDate))
       return { success: false, error: "Coupon has expired" };
-    }
-
     if (coupon.usageLimit !== null && coupon.usageCount >= coupon.usageLimit) {
       return { success: false, error: "Coupon usage limit reached" };
     }
-
-    // Increment usage count
-    const stmt = this.db.prepare(`
-      UPDATE coupons 
-      SET usage_count = usage_count + 1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-    stmt.run(coupon.id);
-
-    // Get updated coupon
-    const updatedCoupon = this.getCouponById(parseInt(coupon.id));
-
+    await this.client.execute({
+      sql: "UPDATE coupons SET usage_count = usage_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      args: [coupon.id],
+    });
+    const updatedCoupon = await this.getCouponById(parseInt(coupon.id));
     return { success: true, coupon: updatedCoupon };
   }
 
-  // Get count of active coupons for a business (for badge display)
-  getActiveCouponCount(businessId: string): number {
-    const stmt = this.db.prepare(`
-      SELECT COUNT(*) as count
-      FROM coupons 
-      WHERE business_id = ? 
-        AND is_active = 1
-        AND datetime(start_date) <= datetime('now')
-        AND datetime(end_date) >= datetime('now')
-    `);
-    const result = stmt.get(businessId) as { count: number };
-    return result.count;
+  async getActiveCouponCount(businessId: string): Promise<number> {
+    const result = await this.client.execute({
+      sql: `SELECT COUNT(*) as count FROM coupons
+            WHERE business_id = ? AND is_active = 1
+              AND datetime(start_date) <= datetime('now')
+              AND datetime(end_date) >= datetime('now')`,
+      args: [businessId],
+    });
+    return toNum((result.rows[0] as any).count);
   }
 
-  // Auto-expire coupons (for cron job)
-  expireOldCoupons(): number {
-    const stmt = this.db.prepare(`
-      UPDATE coupons 
-      SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-      WHERE is_active = 1 AND datetime(end_date) < datetime('now')
-    `);
-    const result = stmt.run();
-    if (result.changes > 0) {
-      console.log(`Auto-expired ${result.changes} coupons`);
-    }
-    return result.changes;
+  async expireOldCoupons(): Promise<number> {
+    const result = await this.client.execute(
+      "UPDATE coupons SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE is_active = 1 AND datetime(end_date) < datetime('now')",
+    );
+    if (result.rowsAffected > 0)
+      console.log(`Auto-expired ${result.rowsAffected} coupons`);
+    return result.rowsAffected;
   }
 
   // ─── Rideshare Methods ───────────────────────────────────────────────────────
 
-  createRideshare(data: {
+  async createRideshare(data: {
     creatorId: string;
     originName: string;
     originLat: number;
@@ -1125,7 +1053,7 @@ class DatabaseManager {
     destinationLng: number;
     maxPassengers: number;
     note?: string;
-  }): Rideshare {
+  }): Promise<Rideshare> {
     const {
       creatorId,
       originName,
@@ -1137,452 +1065,334 @@ class DatabaseManager {
       maxPassengers,
       note,
     } = data;
-
-    if (maxPassengers < 1 || maxPassengers > 4) {
+    if (maxPassengers < 1 || maxPassengers > 4)
       throw new Error("Max passengers must be between 1 and 4");
-    }
 
-    // Generate a unique 6-char share code
-    const generateCode = (): string => {
-      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I,O,0,1 to avoid confusion
-      let code = "";
-      for (let i = 0; i < 6; i++)
-        code += chars[Math.floor(Math.random() * chars.length)];
-      return code;
-    };
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const generateCode = () =>
+      Array.from(
+        { length: 6 },
+        () => chars[Math.floor(Math.random() * chars.length)],
+      ).join("");
     let shareCode = generateCode();
-    // Ensure uniqueness (extremely unlikely collision but just in case)
-    while (
-      this.db
-        .prepare("SELECT 1 FROM rideshares WHERE share_code = ?")
-        .get(shareCode)
-    ) {
+    while (true) {
+      const existing = await this.client.execute({
+        sql: "SELECT 1 FROM rideshares WHERE share_code = ?",
+        args: [shareCode],
+      });
+      if (existing.rows.length === 0) break;
       shareCode = generateCode();
     }
 
-    const stmt = this.db.prepare(`
-      INSERT INTO rideshares (
-        creator_id, origin_name, origin_lat, origin_lng,
-        destination_name, destination_lat, destination_lng,
-        max_passengers, note, share_code
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    const result = await this.client.execute({
+      sql: `INSERT INTO rideshares (
+              creator_id, origin_name, origin_lat, origin_lng,
+              destination_name, destination_lat, destination_lng,
+              max_passengers, note, share_code
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        creatorId,
+        originName,
+        originLat,
+        originLng,
+        destinationName,
+        destinationLat,
+        destinationLng,
+        maxPassengers,
+        note ?? null,
+        shareCode,
+      ],
+    });
+    const rideshareId = toNum(result.lastInsertRowid);
+    await this.client.execute({
+      sql: "INSERT INTO rideshare_passengers (rideshare_id, user_id) VALUES (?, ?)",
+      args: [rideshareId, creatorId],
+    });
+    return this.getRideshareById(rideshareId);
+  }
 
-    const result = stmt.run(
-      creatorId,
-      originName,
-      originLat,
-      originLng,
-      destinationName,
-      destinationLat,
-      destinationLng,
-      maxPassengers,
-      note ?? null,
-      shareCode,
+  async getRideshareById(id: number): Promise<Rideshare> {
+    const result = await this.client.execute({
+      sql: `SELECT r.*, u1.name as creator_name, u2.name as driver_name,
+                   (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+            FROM rideshares r
+            JOIN users u1 ON u1.id = r.creator_id
+            LEFT JOIN users u2 ON u2.id = r.driver_id
+            WHERE r.id = ?`,
+      args: [id],
+    });
+    if (!result.rows[0]) throw new Error("Rideshare not found");
+    return mapRideshareRow(result.rows[0] as Record<string, unknown>);
+  }
+
+  async getRideshareByShareCode(code: string): Promise<Rideshare | null> {
+    const result = await this.client.execute({
+      sql: `SELECT r.*, u1.name as creator_name, u2.name as driver_name,
+                   (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+            FROM rideshares r
+            JOIN users u1 ON u1.id = r.creator_id
+            LEFT JOIN users u2 ON u2.id = r.driver_id
+            WHERE r.share_code = ?`,
+      args: [code.toUpperCase()],
+    });
+    if (!result.rows[0]) return null;
+    return mapRideshareRow(result.rows[0] as Record<string, unknown>);
+  }
+
+  async getActiveRideshares(): Promise<Rideshare[]> {
+    const result = await this.client.execute({
+      sql: `SELECT r.*, u1.name as creator_name, u2.name as driver_name,
+                   (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+            FROM rideshares r
+            JOIN users u1 ON u1.id = r.creator_id
+            LEFT JOIN users u2 ON u2.id = r.driver_id
+            WHERE r.status IN ('waiting', 'accepted')
+            ORDER BY r.created_at DESC`,
+      args: [],
+    });
+    return (result.rows as unknown as Record<string, unknown>[]).map(
+      mapRideshareRow,
     );
-
-    // Creator is also the first passenger
-    this.db
-      .prepare(
-        "INSERT INTO rideshare_passengers (rideshare_id, user_id) VALUES (?, ?)",
-      )
-      .run(result.lastInsertRowid, creatorId);
-
-    return this.getRideshareById(result.lastInsertRowid as number);
   }
 
-  getRideshareById(id: number): Rideshare {
-    const row = this.db
-      .prepare(
-        `
-      SELECT r.*, u1.name as creator_name, u2.name as driver_name,
-        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
-      FROM rideshares r
-      JOIN users u1 ON u1.id = r.creator_id
-      LEFT JOIN users u2 ON u2.id = r.driver_id
-      WHERE r.id = ?
-    `,
-      )
-      .get(id) as any;
-
-    if (!row) throw new Error("Rideshare not found");
-    return this.mapRideshareRow(row);
-  }
-
-  getRideshareByShareCode(code: string): Rideshare | null {
-    const row = this.db
-      .prepare(
-        `
-      SELECT r.*, u1.name as creator_name, u2.name as driver_name,
-        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
-      FROM rideshares r
-      JOIN users u1 ON u1.id = r.creator_id
-      LEFT JOIN users u2 ON u2.id = r.driver_id
-      WHERE r.share_code = ?
-    `,
-      )
-      .get(code.toUpperCase()) as any;
-
-    if (!row) return null;
-    return this.mapRideshareRow(row);
-  }
-
-  private mapRideshareRow(row: any): Rideshare {
-    return {
-      id: row.id.toString(),
-      creatorId: row.creator_id.toString(),
-      creatorName: row.creator_name,
-      driverId: row.driver_id?.toString() ?? null,
-      driverName: row.driver_name ?? null,
-      originName: row.origin_name,
-      originLat: row.origin_lat,
-      originLng: row.origin_lng,
-      destinationName: row.destination_name,
-      destinationLat: row.destination_lat,
-      destinationLng: row.destination_lng,
-      maxPassengers: row.max_passengers,
-      currentPassengers: row.current_passengers,
-      status: row.status as RideshareStatus,
-      note: row.note,
-      shareCode: row.share_code ?? "",
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  getActiveRideshares(): Rideshare[] {
-    const rows = this.db
-      .prepare(
-        `
-      SELECT r.*, u1.name as creator_name, u2.name as driver_name,
-        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
-      FROM rideshares r
-      JOIN users u1 ON u1.id = r.creator_id
-      LEFT JOIN users u2 ON u2.id = r.driver_id
-      WHERE r.status IN ('waiting', 'accepted')
-      ORDER BY r.created_at DESC
-    `,
-      )
-      .all() as any[];
-
-    return rows.map((row: any) => this.mapRideshareRow(row));
-  }
-
-  getAllRideshares(includeCompleted: boolean = false): Rideshare[] {
-    const statusFilter = includeCompleted
+  async getAllRideshares(includeCompleted = false): Promise<Rideshare[]> {
+    const where = includeCompleted
       ? ""
       : "WHERE r.status NOT IN ('completed', 'cancelled')";
-
-    const rows = this.db
-      .prepare(
-        `
-      SELECT r.*, u1.name as creator_name, u2.name as driver_name,
-        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
-      FROM rideshares r
-      JOIN users u1 ON u1.id = r.creator_id
-      LEFT JOIN users u2 ON u2.id = r.driver_id
-      ${statusFilter}
-      ORDER BY r.created_at DESC
-    `,
-      )
-      .all() as any[];
-
-    return rows.map((row: any) => this.mapRideshareRow(row));
+    const result = await this.client.execute({
+      sql: `SELECT r.*, u1.name as creator_name, u2.name as driver_name,
+                   (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+            FROM rideshares r
+            JOIN users u1 ON u1.id = r.creator_id
+            LEFT JOIN users u2 ON u2.id = r.driver_id
+            ${where}
+            ORDER BY r.created_at DESC`,
+      args: [],
+    });
+    return (result.rows as unknown as Record<string, unknown>[]).map(
+      mapRideshareRow,
+    );
   }
 
-  getUserRideshares(userId: string): Rideshare[] {
-    const rows = this.db
-      .prepare(
-        `
-      SELECT DISTINCT r.*, u1.name as creator_name, u2.name as driver_name,
-        (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
-      FROM rideshares r
-      JOIN users u1 ON u1.id = r.creator_id
-      LEFT JOIN users u2 ON u2.id = r.driver_id
-      LEFT JOIN rideshare_passengers rp ON rp.rideshare_id = r.id
-      WHERE r.creator_id = ? OR r.driver_id = ? OR rp.user_id = ?
-      ORDER BY r.created_at DESC
-    `,
-      )
-      .all(userId, userId, userId) as any[];
-
-    return rows.map((row: any) => this.mapRideshareRow(row));
+  async getUserRideshares(userId: string): Promise<Rideshare[]> {
+    const result = await this.client.execute({
+      sql: `SELECT DISTINCT r.*, u1.name as creator_name, u2.name as driver_name,
+                   (SELECT COUNT(*) FROM rideshare_passengers WHERE rideshare_id = r.id) as current_passengers
+            FROM rideshares r
+            JOIN users u1 ON u1.id = r.creator_id
+            LEFT JOIN users u2 ON u2.id = r.driver_id
+            LEFT JOIN rideshare_passengers rp ON rp.rideshare_id = r.id
+            WHERE r.creator_id = ? OR r.driver_id = ? OR rp.user_id = ?
+            ORDER BY r.created_at DESC`,
+      args: [userId, userId, userId],
+    });
+    return (result.rows as unknown as Record<string, unknown>[]).map(
+      mapRideshareRow,
+    );
   }
 
-  getRidesharePassengers(rideshareId: string): RidesharePassenger[] {
-    const rows = this.db
-      .prepare(
-        `
-      SELECT rp.id, rp.rideshare_id, rp.user_id, u.name as user_name, rp.joined_at
-      FROM rideshare_passengers rp
-      JOIN users u ON u.id = rp.user_id
-      WHERE rp.rideshare_id = ?
-      ORDER BY rp.joined_at ASC
-    `,
-      )
-      .all(rideshareId) as any[];
-
-    return rows.map((row: any) => ({
-      id: row.id.toString(),
-      rideshareId: row.rideshare_id.toString(),
-      userId: row.user_id.toString(),
-      userName: row.user_name,
-      joinedAt: row.joined_at,
+  async getRidesharePassengers(
+    rideshareId: string,
+  ): Promise<RidesharePassenger[]> {
+    const result = await this.client.execute({
+      sql: `SELECT rp.id, rp.rideshare_id, rp.user_id, u.name as user_name, rp.joined_at
+            FROM rideshare_passengers rp
+            JOIN users u ON u.id = rp.user_id
+            WHERE rp.rideshare_id = ? ORDER BY rp.joined_at ASC`,
+      args: [rideshareId],
+    });
+    return (result.rows as any[]).map((row) => ({
+      id: String(row.id),
+      rideshareId: String(row.rideshare_id),
+      userId: String(row.user_id),
+      userName: row.user_name as string,
+      joinedAt: row.joined_at as string,
     }));
   }
 
-  joinRideshare(
+  async joinRideshare(
     rideshareId: string,
     userId: string,
-  ): { success: boolean; error?: string } {
-    const rideshare = this.getRideshareById(parseInt(rideshareId));
-
-    if (!rideshare) {
-      return { success: false, error: "Rideshare not found" };
-    }
-
-    if (rideshare.status === "in_transit") {
+  ): Promise<{ success: boolean; error?: string }> {
+    const rideshare = await this.getRideshareById(parseInt(rideshareId));
+    if (rideshare.status === "in_transit")
       return {
         success: false,
         error: "This ride is already in transit — lobby is closed",
       };
-    }
-
-    if (rideshare.status === "completed" || rideshare.status === "cancelled") {
+    if (rideshare.status === "completed" || rideshare.status === "cancelled")
       return { success: false, error: "This ride is no longer active" };
-    }
-
-    if (rideshare.currentPassengers >= rideshare.maxPassengers) {
+    if (rideshare.currentPassengers >= rideshare.maxPassengers)
       return { success: false, error: "This ride is full" };
-    }
-
-    // Check if already joined
-    const existing = this.db
-      .prepare(
-        "SELECT 1 FROM rideshare_passengers WHERE rideshare_id = ? AND user_id = ?",
-      )
-      .get(rideshareId, userId);
-
-    if (existing) {
+    const existing = await this.client.execute({
+      sql: "SELECT 1 FROM rideshare_passengers WHERE rideshare_id = ? AND user_id = ?",
+      args: [rideshareId, userId],
+    });
+    if (existing.rows.length > 0)
       return { success: false, error: "You already joined this ride" };
-    }
-
     try {
-      this.db
-        .prepare(
-          "INSERT INTO rideshare_passengers (rideshare_id, user_id) VALUES (?, ?)",
-        )
-        .run(rideshareId, userId);
-
-      this.db
-        .prepare(
-          "UPDATE rideshares SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        )
-        .run(rideshareId);
-
+      await this.client.batch(
+        [
+          {
+            sql: "INSERT INTO rideshare_passengers (rideshare_id, user_id) VALUES (?, ?)",
+            args: [rideshareId, userId],
+          },
+          {
+            sql: "UPDATE rideshares SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            args: [rideshareId],
+          },
+        ],
+        "write",
+      );
       return { success: true };
     } catch (error: any) {
-      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      if (error.message?.includes("UNIQUE constraint failed"))
         return { success: false, error: "You already joined this ride" };
-      }
       throw error;
     }
   }
 
-  leaveRideshare(
+  async leaveRideshare(
     rideshareId: string,
     userId: string,
-  ): { success: boolean; error?: string } {
-    const rideshare = this.getRideshareById(parseInt(rideshareId));
-
-    if (rideshare.status === "in_transit") {
+  ): Promise<{ success: boolean; error?: string }> {
+    const rideshare = await this.getRideshareById(parseInt(rideshareId));
+    if (rideshare.status === "in_transit")
       return {
         success: false,
         error: "Cannot leave a ride that is in transit",
       };
-    }
-
-    if (rideshare.creatorId === userId) {
+    if (rideshare.creatorId === userId)
       return {
         success: false,
         error: "The creator cannot leave — cancel the ride instead",
       };
-    }
-
-    const result = this.db
-      .prepare(
-        "DELETE FROM rideshare_passengers WHERE rideshare_id = ? AND user_id = ?",
-      )
-      .run(rideshareId, userId);
-
-    if (result.changes === 0) {
+    const result = await this.client.execute({
+      sql: "DELETE FROM rideshare_passengers WHERE rideshare_id = ? AND user_id = ?",
+      args: [rideshareId, userId],
+    });
+    if (result.rowsAffected === 0)
       return { success: false, error: "You are not in this ride" };
-    }
-
-    this.db
-      .prepare(
-        "UPDATE rideshares SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-      .run(rideshareId);
-
+    await this.client.execute({
+      sql: "UPDATE rideshares SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      args: [rideshareId],
+    });
     return { success: true };
   }
 
-  acceptTransport(
+  async acceptTransport(
     rideshareId: string,
     driverId: string,
-  ): { success: boolean; error?: string } {
-    const rideshare = this.getRideshareById(parseInt(rideshareId));
-
-    if (rideshare.status !== "waiting") {
+  ): Promise<{ success: boolean; error?: string }> {
+    const rideshare = await this.getRideshareById(parseInt(rideshareId));
+    if (rideshare.status !== "waiting")
       return {
         success: false,
         error: "This ride already has a driver or is no longer waiting",
       };
-    }
-
-    if (rideshare.creatorId === driverId) {
+    if (rideshare.creatorId === driverId)
       return { success: false, error: "The creator cannot also be the driver" };
-    }
-
-    this.db
-      .prepare(
-        "UPDATE rideshares SET driver_id = ?, status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-      .run(driverId, rideshareId);
-
+    await this.client.execute({
+      sql: "UPDATE rideshares SET driver_id = ?, status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      args: [driverId, rideshareId],
+    });
     return { success: true };
   }
 
-  startTransport(
+  async startTransport(
     rideshareId: string,
     driverId: string,
-  ): { success: boolean; error?: string } {
-    const rideshare = this.getRideshareById(parseInt(rideshareId));
-
-    if (rideshare.driverId !== driverId) {
+  ): Promise<{ success: boolean; error?: string }> {
+    const rideshare = await this.getRideshareById(parseInt(rideshareId));
+    if (rideshare.driverId !== driverId)
       return {
         success: false,
         error: "Only the assigned driver can start the transport",
       };
-    }
-
-    if (rideshare.status !== "accepted") {
+    if (rideshare.status !== "accepted")
       return {
         success: false,
         error: "Transport must be accepted before starting",
       };
-    }
-
-    this.db
-      .prepare(
-        "UPDATE rideshares SET status = 'in_transit', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-      .run(rideshareId);
-
+    await this.client.execute({
+      sql: "UPDATE rideshares SET status = 'in_transit', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      args: [rideshareId],
+    });
     return { success: true };
   }
 
-  completeRideshare(
+  async completeRideshare(
     rideshareId: string,
     userId: string,
-  ): { success: boolean; error?: string } {
-    const rideshare = this.getRideshareById(parseInt(rideshareId));
-
-    if (rideshare.driverId !== userId && rideshare.creatorId !== userId) {
+  ): Promise<{ success: boolean; error?: string }> {
+    const rideshare = await this.getRideshareById(parseInt(rideshareId));
+    if (rideshare.driverId !== userId && rideshare.creatorId !== userId)
       return {
         success: false,
         error: "Only the driver or creator can complete the ride",
       };
-    }
-
-    if (rideshare.status !== "in_transit") {
+    if (rideshare.status !== "in_transit")
       return {
         success: false,
         error: "Can only complete a ride that is in transit",
       };
-    }
-
-    this.db
-      .prepare(
-        "UPDATE rideshares SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-      .run(rideshareId);
-
+    await this.client.execute({
+      sql: "UPDATE rideshares SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      args: [rideshareId],
+    });
     return { success: true };
   }
 
-  cancelRideshare(
+  async cancelRideshare(
     rideshareId: string,
     userId: string,
-  ): { success: boolean; error?: string } {
-    const rideshare = this.getRideshareById(parseInt(rideshareId));
-
-    if (rideshare.creatorId !== userId && rideshare.driverId !== userId) {
+  ): Promise<{ success: boolean; error?: string }> {
+    const rideshare = await this.getRideshareById(parseInt(rideshareId));
+    if (rideshare.creatorId !== userId && rideshare.driverId !== userId)
       return { success: false, error: "Only the creator or driver can cancel" };
-    }
-
-    if (rideshare.status === "completed") {
+    if (rideshare.status === "completed")
       return { success: false, error: "Cannot cancel a completed ride" };
-    }
-
-    this.db
-      .prepare(
-        "UPDATE rideshares SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-      .run(rideshareId);
-
+    await this.client.execute({
+      sql: "UPDATE rideshares SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      args: [rideshareId],
+    });
     return { success: true };
   }
 
-  // Clean up old completed/cancelled rideshares (older than 24 hours)
-  cleanupOldRideshares(): number {
-    const stmt = this.db.prepare(`
-      DELETE FROM rideshares
-      WHERE status IN ('completed', 'cancelled')
-        AND datetime(updated_at) < datetime('now', '-24 hours')
-    `);
-    const result = stmt.run();
-    if (result.changes > 0) {
-      console.log(`Cleaned up ${result.changes} old rideshares`);
-    }
-    return result.changes;
+  async cleanupOldRideshares(): Promise<number> {
+    const result = await this.client.execute(
+      `DELETE FROM rideshares WHERE status IN ('completed', 'cancelled')
+       AND datetime(updated_at) < datetime('now', '-24 hours')`,
+    );
+    if (result.rowsAffected > 0)
+      console.log(`Cleaned up ${result.rowsAffected} old rideshares`);
+    return result.rowsAffected;
   }
 
-  // ─── Session management ─────────────────────────────────────────────────────
-
   close(): void {
-    this.db.close();
+    // No-op: @libsql/client remote connections close automatically.
   }
 }
 
-// Singleton instance
-// Use process.cwd() as fallback so the DB always lands at the project root
-// regardless of __dirname (which varies based on how tsx resolves the file).
-const dbPath =
-  process.env.DATABASE_PATH || path.join(process.cwd(), "database.sqlite");
-export const db = new DatabaseManager(dbPath);
+// ─── Singleton ────────────────────────────────────────────────────────────────
 
-// Cleanup expired sessions every hour
+export const db = new DatabaseManager();
+
 setInterval(
-  () => {
-    db.cleanupExpiredSessions();
+  async () => {
+    await db.cleanupExpiredSessions();
   },
   60 * 60 * 1000,
 );
-
-// Auto-expire coupons every hour
 setInterval(
-  () => {
-    db.expireOldCoupons();
+  async () => {
+    await db.expireOldCoupons();
   },
   60 * 60 * 1000,
 );
-
-// Cleanup old rideshares every hour
 setInterval(
-  () => {
-    db.cleanupOldRideshares();
+  async () => {
+    await db.cleanupOldRideshares();
   },
   60 * 60 * 1000,
 );

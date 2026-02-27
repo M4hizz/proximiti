@@ -19,6 +19,7 @@
     "create-test-user": "node scripts/create-test-user.js"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.0",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@stripe/stripe-js": "^8.8.0",

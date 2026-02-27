@@ -34,7 +34,7 @@ class AuthService {
     return crypto.randomBytes(16).toString("hex");
   }
 
-  static generateTokens(user: User) {
+  static async generateTokens(user: User) {
     const jti = this.generateJTI();
     const payload: JWTPayload = {
       userId: user.id,
@@ -67,7 +67,7 @@ class AuthService {
     expiresAt.setTime(
       expiresAt.getTime() + this.parseExpiration(this.jwtExpiresIn),
     );
-    db.createSession(user.id, jti, expiresAt);
+    await db.createSession(user.id, jti, expiresAt);
 
     return { accessToken, refreshToken };
   }
@@ -90,7 +90,7 @@ class AuthService {
     }
   }
 
-  static verifyToken(token: string): JWTPayload | null {
+  static async verifyToken(token: string): Promise<JWTPayload | null> {
     try {
       const verifyOptions: VerifyOptions = {
         issuer: "proximiti-app",
@@ -104,7 +104,7 @@ class AuthService {
       ) as JWTPayload;
 
       // Check if session is still valid in database
-      if (!db.isSessionValid(payload.jti)) {
+      if (!(await db.isSessionValid(payload.jti))) {
         return null;
       }
 
@@ -114,15 +114,15 @@ class AuthService {
     }
   }
 
-  static revokeToken(jti: string) {
-    db.revokeSession(jti);
+  static async revokeToken(jti: string) {
+    await db.revokeSession(jti);
   }
 
-  static revokeAllUserTokens(userId: string) {
-    db.revokeAllUserSessions(userId);
+  static async revokeAllUserTokens(userId: string) {
+    await db.revokeAllUserSessions(userId);
   }
 
-  static refreshToken(refreshToken: string) {
+  static async refreshToken(refreshToken: string) {
     try {
       const verifyOptions: VerifyOptions = {
         issuer: "proximiti-app",
@@ -135,7 +135,7 @@ class AuthService {
         verifyOptions,
       ) as any;
 
-      const user = db.getUserById(parseInt(payload.userId));
+      const user = await db.getUserById(parseInt(payload.userId));
       return this.generateTokens(user);
     } catch {
       throw new Error("Invalid refresh token");
@@ -197,7 +197,7 @@ const authenticate = async (
       });
     }
 
-    const payload = AuthService.verifyToken(token);
+    const payload = await AuthService.verifyToken(token);
     if (!payload) {
       return res.status(401).json({
         error: "Authentication failed",
@@ -206,7 +206,7 @@ const authenticate = async (
     }
 
     // Get fresh user data from database
-    const user = db.getUserById(parseInt(payload.userId));
+    const user = await db.getUserById(parseInt(payload.userId));
     if (!user || !user.isVerified) {
       return res.status(401).json({
         error: "Authentication failed",
@@ -245,9 +245,9 @@ const optionalAuthenticate = async (
     }
 
     if (token) {
-      const payload = AuthService.verifyToken(token);
+      const payload = await AuthService.verifyToken(token);
       if (payload) {
-        const user = db.getUserById(parseInt(payload.userId));
+        const user = await db.getUserById(parseInt(payload.userId));
         if (user && user.isVerified) {
           req.user = user;
           req.sessionId = payload.jti;

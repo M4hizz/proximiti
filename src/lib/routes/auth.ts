@@ -93,11 +93,11 @@ router.post(
         });
       }
 
-      let user = db.getUserByGoogleId(googleData.sub);
+      let user = await db.getUserByGoogleId(googleData.sub);
 
       if (!user) {
         // Check if user exists with same email but different provider
-        const existingUser = db.getUserByEmail(googleData.email);
+        const existingUser = await db.getUserByEmail(googleData.email);
         if (existingUser) {
           return res.status(409).json({
             error: "Email already registered",
@@ -126,8 +126,10 @@ router.post(
         }
       }
 
-      // Generate JWT tokens
-      const { accessToken, refreshToken } = AuthService.generateTokens(user);
+      // Generate JWT tokens (Google OAuth)
+      const { accessToken, refreshToken } = await AuthService.generateTokens(
+        user!,
+      );
 
       // Set secure cookies
       const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000); // 7 days
@@ -191,12 +193,13 @@ router.post(
       // Auto-verify on successful login — no email system is in place so
       // blocking unverified accounts would permanently lock users out.
       if (!user.isVerified) {
-        db.updateUser(user.id, { isVerified: true });
+        await db.updateUser(user.id, { isVerified: true });
         user.isVerified = true;
       }
 
       // Generate JWT tokens
-      const { accessToken, refreshToken } = AuthService.generateTokens(user);
+      const { accessToken, refreshToken } =
+        await AuthService.generateTokens(user);
 
       // Set secure cookies
       const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000);
@@ -311,7 +314,7 @@ router.post(
       }
 
       const { accessToken, refreshToken: newRefreshToken } =
-        AuthService.refreshToken(refreshToken);
+        await AuthService.refreshToken(refreshToken);
 
       // Set new secure cookies
       const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000);
@@ -344,7 +347,7 @@ router.post(
     try {
       // Revoke current session if user is authenticated
       if (req.sessionId) {
-        AuthService.revokeToken(req.sessionId);
+        await AuthService.revokeToken(req.sessionId);
       }
 
       // Clear cookies
@@ -388,7 +391,7 @@ router.post(
       }
 
       // Revoke all user sessions
-      AuthService.revokeAllUserTokens(req.user.id);
+      await AuthService.revokeAllUserTokens(req.user.id);
 
       // Clear cookies
       res.clearCookie("accessToken", {
