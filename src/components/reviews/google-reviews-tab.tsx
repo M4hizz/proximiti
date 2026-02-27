@@ -35,7 +35,6 @@ interface GoogleReviewsTabProps {
 
 const INITIAL_COUNT = 5;
 const LOAD_MORE_COUNT = 5;
-const COOLDOWN_MS = 3000;
 
 /** Formats a Unix timestamp to a human-readable date string. */
 function formatTimestamp(ts: number): string {
@@ -57,7 +56,7 @@ export function GoogleReviewsTab({
   const [reviews, setReviews] = useState<GoogleReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [cooldown, setCooldown] = useState(false);
+  const cooldown = false;
   const [error, setError] = useState<string | null>(null);
   const [apiConfigured, setApiConfigured] = useState(true);
   const [liveRating, setLiveRating] = useState<number | null>(
@@ -104,12 +103,10 @@ export function GoogleReviewsTab({
     setLoadingMore(true);
     setError(null);
     try {
-      const data = await fetchGoogleReviews(
-        businessName,
-        lat,
-        lng,
-        nextPageToken,
-      );
+      const data = await fetchGoogleReviews(businessName, lat, lng, {
+        pagetoken: nextPageToken,
+        placeId: placeId ?? undefined,
+      });
       setReviews((prev) => [...prev, ...data.reviews]);
       setNextPageToken(data.nextPageToken);
       setHasMorePages(data.nextPageToken !== null);
@@ -134,9 +131,6 @@ export function GoogleReviewsTab({
   const handleShowMore = () => {
     loadMoreGoogleReviews();
   };
-
-  const displayedReviews = reviews.slice(0, displayCount);
-  const canShowMore = hasMorePages || displayCount < reviews.length;
 
   if (!apiConfigured) {
     return (

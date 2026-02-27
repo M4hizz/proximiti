@@ -14,7 +14,6 @@ import { fetchNearbyBusinesses, searchBusinesses } from "@/lib/api";
 import { getBookmarkedIds } from "@/lib/bookmarks";
 import type { Business } from "@/lib/businesses";
 import {
-  Compass,
   User,
   LogOut,
   LogIn,
