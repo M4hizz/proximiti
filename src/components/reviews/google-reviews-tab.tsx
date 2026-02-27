@@ -33,8 +33,7 @@ interface GoogleReviewsTabProps {
   onGoogleData?: (rating: number, totalRatings: number) => void;
 }
 
-const INITIAL_COUNT = 5;
-const LOAD_MORE_COUNT = 5;
+
 
 /** Formats a Unix timestamp to a human-readable date string. */
 function formatTimestamp(ts: number): string {
@@ -63,7 +62,6 @@ export function GoogleReviewsTab({
     googleRating ?? null,
   );
   const [totalRatings, setTotalRatings] = useState<number | null>(null);
-  const [displayCount, setDisplayCount] = useState(INITIAL_COUNT);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [hasMorePages, setHasMorePages] = useState(false);
   // placeId is returned server-side and sent back on subsequent pagination requests
@@ -110,7 +108,6 @@ export function GoogleReviewsTab({
       setReviews((prev) => [...prev, ...data.reviews]);
       setNextPageToken(data.nextPageToken);
       setHasMorePages(data.nextPageToken !== null);
-      setDisplayCount((prev) => prev + LOAD_MORE_COUNT);
     } catch (err: any) {
       const errorMsg = err.message || "Could not load more reviews.";
       if (errorMsg.includes("429") || errorMsg.includes("rate")) {
