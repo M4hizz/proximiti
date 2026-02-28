@@ -89,7 +89,10 @@ const corsOptions: CorsOptions = {
       process.env.FRONTEND_URL,
     ].filter(Boolean) as string[];
 
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow any Vercel preview/production deployment
+    const isVercelOrigin = origin ? /^https:\/\/[\w-]+\.vercel\.app$/.test(origin) : false;
+
+    if (!origin || allowedOrigins.includes(origin) || isVercelOrigin) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
