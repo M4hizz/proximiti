@@ -136,7 +136,11 @@ router.post(
         const challengeToken = jwt.sign(
           { userId: user!.id, challenge: true },
           process.env.JWT_SECRET!,
-          { expiresIn: "5m", issuer: "proximiti-app", audience: "proximiti-users" },
+          {
+            expiresIn: "5m",
+            issuer: "proximiti-app",
+            audience: "proximiti-users",
+          },
         );
         return res.status(200).json({ totpRequired: true, challengeToken });
       }
