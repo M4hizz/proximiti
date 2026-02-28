@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AccountSettingsModal } from "@/components/account-settings-modal";
 
 export function Header() {
   const navigate = useNavigate();
@@ -18,9 +19,11 @@ export function Header() {
     "delivery",
   );
   const [cartCount] = useState(0);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
   const auth = useAuth();
 
   return (
+    <>
     <header className="sticky top-0 z-50 bg-background border-b border-border">
       <div className="flex items-center justify-between px-4 py-3">
         {/* Logo */}
@@ -96,7 +99,13 @@ export function Header() {
 
           {auth.user ? (
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="rounded-full">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
+                onClick={() => setShowAccountSettings(true)}
+                title="Account Settings"
+              >
                 <User className="h-5 w-5" />
               </Button>
               <span>{auth.user.name}</span>
@@ -132,5 +141,11 @@ export function Header() {
         </div>
       </div>
     </header>
+
+    <AccountSettingsModal
+      isOpen={showAccountSettings}
+      onClose={() => setShowAccountSettings(false)}
+    />
+    </>
   );
 }

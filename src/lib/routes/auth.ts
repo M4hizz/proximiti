@@ -1,11 +1,15 @@
 import { OAuth2Client } from "google-auth-library";
 import { Router, type Response } from "express";
+import jwt from "jsonwebtoken";
 import db from "../database";
 import {
   AuthService,
   type AuthenticatedRequest,
   createRateLimiter,
+  authenticate,
 } from "../auth";
+import { authenticator } from "otplib";
+import QRCode from "qrcode";
 
 const router = Router();
 
@@ -195,6 +199,19 @@ router.post(
       if (!user.isVerified) {
         await db.updateUser(user.id, { isVerified: true });
         user.isVerified = true;
+      }
+
+      // If TOTP is enabled, issue a short-lived challenge token instead of full auth
+      if (user.totpEnabled) {
+        const challengeToken = jwt.sign(
+          { userId: user.id, challenge: true },
+          process.env.JWT_SECRET!,
+          { expiresIn: "5m", issuer: "proximiti-app", audience: "proximiti-users" },
+        );
+        return res.status(200).json({
+          totpRequired: true,
+          challengeToken,
+        });
       }
 
       // Generate JWT tokens
@@ -440,9 +457,215 @@ router.get("/auth/me", async (req: AuthenticatedRequest, res: Response) => {
       isPremium: req.user.isPremium,
       planType: req.user.planType,
       planExpiresAt: req.user.planExpiresAt,
+      totpEnabled: req.user.totpEnabled,
       createdAt: req.user.createdAt,
     },
   });
 });
+
+// ─── TOTP / Google Authenticator Routes ──────────────────────────────────────
+
+// Step 1: Generate a TOTP secret + QR code for the authenticated user
+router.post(
+  "/auth/totp/setup",
+  authRateLimit,
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      if (req.user.totpEnabled) {
+        return res.status(400).json({
+          error: "2FA already enabled",
+          message: "Two-factor authentication is already active. Disable it first.",
+        });
+      }
+
+      // Generate a fresh TOTP secret
+      const secret = authenticator.generateSecret();
+      const appName = process.env.APP_NAME || "Proximiti";
+      const otpAuthUrl = authenticator.keyuri(req.user.email, appName, secret);
+
+      // Generate QR code as a data URL (PNG base64)
+      const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl, { width: 256 });
+
+      // Store the secret temporarily (not yet enabled) so we can verify the next step
+      await db.updateUser(req.user.id, { totpSecret: secret, totpEnabled: false });
+
+      res.status(200).json({
+        secret,
+        qrCodeDataUrl,
+        otpAuthUrl,
+      });
+    } catch (error) {
+      console.error("TOTP setup error:", error);
+      res.status(500).json({ error: "Failed to generate TOTP setup" });
+    }
+  },
+);
+
+// Step 2: Confirm the code and enable TOTP
+router.post(
+  "/auth/totp/enable",
+  authRateLimit,
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      const { code } = req.body as { code: string };
+      if (!code) {
+        return res.status(400).json({ error: "TOTP code is required" });
+      }
+
+      const secret = req.user.totpSecret;
+      if (!secret) {
+        return res.status(400).json({
+          error: "No TOTP setup in progress",
+          message: "Call /auth/totp/setup first",
+        });
+      }
+
+      const isValid = authenticator.verify({ token: code, secret });
+      if (!isValid) {
+        return res.status(400).json({
+          error: "Invalid code",
+          message: "The 6-digit code is incorrect. Make sure your device clock is accurate.",
+        });
+      }
+
+      await db.updateUser(req.user.id, { totpEnabled: true });
+
+      res.status(200).json({ message: "Two-factor authentication enabled successfully." });
+    } catch (error) {
+      console.error("TOTP enable error:", error);
+      res.status(500).json({ error: "Failed to enable TOTP" });
+    }
+  },
+);
+
+// Disable TOTP (requires a valid current code)
+router.post(
+  "/auth/totp/disable",
+  authRateLimit,
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      if (!req.user.totpEnabled) {
+        return res.status(400).json({ error: "2FA is not enabled" });
+      }
+
+      const { code } = req.body as { code: string };
+      if (!code) {
+        return res.status(400).json({ error: "TOTP code is required to disable 2FA" });
+      }
+
+      const secret = req.user.totpSecret;
+      if (!secret) {
+        return res.status(500).json({ error: "Internal error: TOTP secret missing" });
+      }
+
+      const isValid = authenticator.verify({ token: code, secret });
+      if (!isValid) {
+        return res.status(400).json({
+          error: "Invalid code",
+          message: "The 6-digit code is incorrect.",
+        });
+      }
+
+      await db.updateUser(req.user.id, { totpEnabled: false, totpSecret: null });
+
+      res.status(200).json({ message: "Two-factor authentication disabled." });
+    } catch (error) {
+      console.error("TOTP disable error:", error);
+      res.status(500).json({ error: "Failed to disable TOTP" });
+    }
+  },
+);
+
+// Complete login when TOTP is required (accepts a challengeToken + code)
+router.post(
+  "/auth/totp/login",
+  authRateLimit,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { challengeToken, code } = req.body as {
+        challengeToken: string;
+        code: string;
+      };
+
+      if (!challengeToken || !code) {
+        return res.status(400).json({
+          error: "Missing fields",
+          message: "challengeToken and code are required",
+        });
+      }
+
+      // Verify challenge token
+      let payload: any;
+      try {
+        payload = jwt.verify(challengeToken, process.env.JWT_SECRET!, {
+          issuer: "proximiti-app",
+          audience: "proximiti-users",
+        });
+      } catch {
+        return res.status(401).json({
+          error: "Invalid or expired challenge token",
+          message: "Please log in again",
+        });
+      }
+
+      if (!payload.challenge || !payload.userId) {
+        return res.status(401).json({ error: "Invalid challenge token" });
+      }
+
+      const user = await db.getUserById(parseInt(payload.userId));
+      if (!user || !user.totpEnabled || !user.totpSecret) {
+        return res.status(401).json({ error: "User not found or 2FA not configured" });
+      }
+
+      const isValid = authenticator.verify({ token: code, secret: user.totpSecret });
+      if (!isValid) {
+        return res.status(400).json({
+          error: "Invalid code",
+          message: "The 6-digit code is incorrect or expired.",
+        });
+      }
+
+      // Issue full tokens
+      const { accessToken, refreshToken } = await AuthService.generateTokens(user);
+
+      const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000);
+      const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
+
+      res.cookie("accessToken", accessToken, accessCookieOptions);
+      res.cookie("refreshToken", refreshToken, refreshCookieOptions);
+
+      res.status(200).json({
+        message: "Login successful",
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          isVerified: user.isVerified,
+          isPremium: user.isPremium,
+          planType: user.planType,
+          planExpiresAt: user.planExpiresAt,
+          totpEnabled: user.totpEnabled,
+        },
+        tokens: { accessToken, refreshToken },
+      });
+    } catch (error) {
+      console.error("TOTP login error:", error);
+      res.status(500).json({ error: "Login failed" });
+    }
+  },
+);
 
 export default router;

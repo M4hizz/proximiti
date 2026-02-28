@@ -13,6 +13,8 @@ export interface User {
   planType: "basic" | "essential" | "enterprise";
   planExpiresAt: string | null;
   stripeSubscriptionId?: string | null;
+  totpSecret?: string | null;
+  totpEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -110,6 +112,8 @@ function mapUser(row: Record<string, unknown>): User {
       | "enterprise",
     planExpiresAt: (row.planExpiresAt as string) ?? null,
     stripeSubscriptionId: (row.stripeSubscriptionId as string | null) ?? null,
+    totpSecret: (row.totpSecret as string | null) ?? null,
+    totpEnabled: toBool(row.totpEnabled),
     createdAt: row.createdAt as string,
     updatedAt: row.updatedAt as string,
   };
@@ -203,10 +207,20 @@ class DatabaseManager {
         plan_type TEXT DEFAULT 'basic',
         plan_expires_at DATETIME DEFAULT NULL,
         stripe_subscription_id TEXT DEFAULT NULL,
+        totp_secret TEXT DEFAULT NULL,
+        totp_enabled BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migrate: add TOTP columns if they don't exist yet (for existing databases)
+    try {
+      await this.client.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL");
+    } catch { /* already exists */ }
+    try {
+      await this.client.execute("ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT 0");
+    } catch { /* already exists */ }
 
     await this.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -443,6 +457,7 @@ class DatabaseManager {
                    is_premium as isPremium, plan_type as planType,
                    plan_expires_at as planExpiresAt,
                    stripe_subscription_id as stripeSubscriptionId,
+                   totp_secret as totpSecret, totp_enabled as totpEnabled,
                    created_at as createdAt, updated_at as updatedAt
             FROM users WHERE id = ?`,
       args: [id],
@@ -458,6 +473,7 @@ class DatabaseManager {
                    is_premium as isPremium, plan_type as planType,
                    plan_expires_at as planExpiresAt,
                    stripe_subscription_id as stripeSubscriptionId,
+                   totp_secret as totpSecret, totp_enabled as totpEnabled,
                    created_at as createdAt, updated_at as updatedAt
             FROM users WHERE email = ?`,
       args: [email],
@@ -473,6 +489,7 @@ class DatabaseManager {
                    is_premium as isPremium, plan_type as planType,
                    plan_expires_at as planExpiresAt,
                    stripe_subscription_id as stripeSubscriptionId,
+                   totp_secret as totpSecret, totp_enabled as totpEnabled,
                    created_at as createdAt, updated_at as updatedAt
             FROM users WHERE google_id = ?`,
       args: [googleId],
@@ -488,6 +505,7 @@ class DatabaseManager {
                    is_premium as isPremium, plan_type as planType,
                    plan_expires_at as planExpiresAt,
                    stripe_subscription_id as stripeSubscriptionId,
+                   totp_secret as totpSecret, totp_enabled as totpEnabled,
                    created_at as createdAt, updated_at as updatedAt
             FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       args: [limit, offset],

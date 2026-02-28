@@ -12,6 +12,7 @@ export interface User {
   planType: "basic" | "essential" | "enterprise";
   planExpiresAt: string | null;
   stripeSubscriptionId?: string | null;
+  totpEnabled?: boolean;
   createdAt?: string;
 }
 
@@ -23,6 +24,13 @@ export interface AuthResponse {
     refreshToken: string;
   };
 }
+
+export interface TotpChallengeResponse {
+  totpRequired: true;
+  challengeToken: string;
+}
+
+export type LoginResponse = AuthResponse | TotpChallengeResponse;
 
 export interface LoginCredentials {
   email: string;
@@ -83,10 +91,39 @@ class AuthApiService {
   }
 
   // Traditional email/password login
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    return this.request<AuthResponse>("/auth/login", {
+  async login(credentials: LoginCredentials): Promise<LoginResponse> {
+    return this.request<LoginResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify(credentials),
+    });
+  }
+
+  // Complete TOTP login challenge
+  async totpLogin(challengeToken: string, code: string): Promise<AuthResponse> {
+    return this.request<AuthResponse>("/auth/totp/login", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken, code }),
+    });
+  }
+
+  // Generate TOTP secret + QR code
+  async totpSetup(): Promise<{ secret: string; qrCodeDataUrl: string; otpAuthUrl: string }> {
+    return this.request("/auth/totp/setup", { method: "POST" });
+  }
+
+  // Enable TOTP after verifying the code
+  async totpEnable(code: string): Promise<{ message: string }> {
+    return this.request("/auth/totp/enable", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  // Disable TOTP (requires current code)
+  async totpDisable(code: string): Promise<{ message: string }> {
+    return this.request("/auth/totp/disable", {
+      method: "POST",
+      body: JSON.stringify({ code }),
     });
   }
 

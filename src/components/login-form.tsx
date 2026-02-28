@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import authApi from "@/lib/authApi";
 import { Captcha } from "@/components/ui/captcha";
+import { TwoFactorChallenge } from "@/components/two-factor-challenge";
 
 // Declare Google type for TypeScript
 declare global {
@@ -45,6 +46,7 @@ export function LoginForm() {
   const [googleScriptReady, setGoogleScriptReady] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [captchaReset, setCaptchaReset] = useState(0);
+  const [totpChallengeToken, setTotpChallengeToken] = useState<string | null>(null);
   const captchaResetRef = useRef(captchaReset);
 
   const auth = useAuth();
@@ -145,6 +147,11 @@ export function LoginForm() {
     try {
       if (isLogin) {
         const result = await authApi.login({ email, password });
+        // Handle TOTP challenge
+        if ("totpRequired" in result && result.totpRequired) {
+          setTotpChallengeToken(result.challengeToken);
+          return; // Don't reset loading/captcha yet – we're showing the challenge screen
+        }
         auth.login(result.user);
         navigate("/");
       } else {
@@ -182,7 +189,25 @@ export function LoginForm() {
 
   return (
     <div className="w-full max-w-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg dark:shadow-none">
-      <div className="mb-6">
+      {/* TOTP challenge overlay */}
+      {totpChallengeToken && (
+        <TwoFactorChallenge
+          challengeToken={totpChallengeToken}
+          onSuccess={(user) => {
+            auth.login(user);
+            navigate("/");
+          }}
+          onCancel={() => {
+            setTotpChallengeToken(null);
+            setIsLoading(false);
+            setCaptchaVerified(false);
+            captchaResetRef.current += 1;
+            setCaptchaReset(captchaResetRef.current);
+          }}
+        />
+      )}
+      {!totpChallengeToken && (
+      <><div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
           {isLogin ? "Welcome back" : "Create account"}
         </h2>
@@ -344,6 +369,7 @@ export function LoginForm() {
           </p>
         ) : null}
       </div>
+      </>)}
     </div>
   );
 }
