@@ -1,8 +1,3 @@
-/**
- * Mock business data for the Local Business Finder app.
- * Each business includes location coordinates for map pins.
- */
-
 export interface Business {
   id: string;
   name: string;
@@ -213,10 +208,6 @@ export const businesses: Business[] = [
   },
 ];
 
-/**
- * Calculate distance between two coordinates using Haversine formula
- * Returns distance in kilometers
- */
 export function calculateDistance(
   lat1: number,
   lng1: number,
@@ -236,13 +227,6 @@ export function calculateDistance(
   return R * c;
 }
 
-/**
- * Get nearest businesses to a location
- * @param userLat User's latitude
- * @param userLng User's longitude
- * @param limit Maximum number of businesses to return (default: 25)
- * @returns Array of businesses sorted by distance (nearest first)
- */
 export function getNearestBusinesses(
   userLat: number,
   userLng: number,

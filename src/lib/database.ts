@@ -86,8 +86,6 @@ export interface Coupon {
   updatedAt: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function toBool(v: unknown): boolean {
   return v === 1 || v === 1n || v === true || v === "1";
 }
@@ -161,8 +159,6 @@ function mapRideshareRow(row: Record<string, unknown>): Rideshare {
     updatedAt: row.updated_at as string,
   };
 }
-
-// ─── DatabaseManager ──────────────────────────────────────────────────────────
 
 class DatabaseManager {
   private client: Client;
@@ -413,8 +409,6 @@ class DatabaseManager {
     }
   }
 
-  // ─── User Methods ────────────────────────────────────────────────────────────
-
   async createUser(userData: {
     email: string;
     name: string;
@@ -604,8 +598,6 @@ class DatabaseManager {
     return this.getUserById(parseInt(id));
   }
 
-  // ─── Session Management ──────────────────────────────────────────────────────
-
   async createSession(
     userId: string,
     jti: string,
@@ -646,8 +638,6 @@ class DatabaseManager {
     if (result.rowsAffected > 0)
       console.log(`Cleaned up ${result.rowsAffected} expired sessions`);
   }
-
-  // ─── Review Methods ──────────────────────────────────────────────────────────
 
   async createReview(
     businessId: string,
@@ -825,8 +815,6 @@ class DatabaseManager {
     }
   }
 
-  // ─── Photo Cache ─────────────────────────────────────────────────────────────
-
   async cachePhoto(key: string, photoUrl: string): Promise<void> {
     await this.client.execute({
       sql: "INSERT OR REPLACE INTO business_photos (cache_key, photo_url) VALUES (?, ?)",
@@ -843,8 +831,6 @@ class DatabaseManager {
       ? ((result.rows[0] as any).photo_url as string)
       : null;
   }
-
-  // ─── Coupon Methods ──────────────────────────────────────────────────────────
 
   async createCoupon(couponData: {
     businessId: string;
@@ -1087,8 +1073,6 @@ class DatabaseManager {
       console.log(`Auto-expired ${result.rowsAffected} coupons`);
     return result.rowsAffected;
   }
-
-  // ─── Rideshare Methods ───────────────────────────────────────────────────────
 
   async createRideshare(data: {
     creatorId: string;
@@ -1420,8 +1404,6 @@ class DatabaseManager {
     // No-op: @libsql/client remote connections close automatically.
   }
 }
-
-// ─── Singleton ────────────────────────────────────────────────────────────────
 
 export const db = new DatabaseManager();
 

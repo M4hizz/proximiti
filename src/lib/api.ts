@@ -233,11 +233,9 @@ export async function fetchNearbyBusinesses(
   lng: number,
   radius: number = 2000,
 ): Promise<Business[]> {
-  // ── 1. Try Google Places (comprehensive, includes chains like Starbucks) ──
   const googleResults = await fetchNearbyFromGoogle(lat, lng, radius);
   if (googleResults) return googleResults;
 
-  // ── 2. Fall back to OpenStreetMap / Overpass via server proxy (avoids CSP) ──
   try {
     const osmRes = await fetch(
       `${BASE_URL}/osm/nearby?lat=${lat}&lng=${lng}&radius=${radius}`,

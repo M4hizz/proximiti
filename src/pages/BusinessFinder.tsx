@@ -51,7 +51,6 @@ export function BusinessFinder() {
   const auth = useAuth();
   const { theme, toggleTheme } = useTheme();
 
-  // State management
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(
@@ -144,7 +143,6 @@ export function BusinessFinder() {
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        // Use known location, or get it now, or fall back to a wide default
         let searchLat = locationRef.current?.[0];
         let searchLng = locationRef.current?.[1];
 
@@ -162,7 +160,6 @@ export function BusinessFinder() {
             searchLng = pos.coords.longitude;
             setUserLocation([searchLat, searchLng]);
           } catch {
-            // No location available — use a default
             searchLat = 43.7;
             searchLng = -79.4; // Greater Toronto area default
           }
@@ -184,7 +181,6 @@ export function BusinessFinder() {
     return () => clearTimeout(timer);
   }, [searchQuery]); // Only depend on searchQuery — not userLocation (avoids re-fire loop)
 
-  // Close sort dropdown when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
@@ -195,7 +191,6 @@ export function BusinessFinder() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Get businesses based on user location (real API data) or default mock businesses
   const availableBusinesses = useMemo(() => {
     if (userLocation && nearbyBusinesses.length > 0) {
       return nearbyBusinesses;
@@ -203,7 +198,6 @@ export function BusinessFinder() {
     return businesses;
   }, [userLocation, nearbyBusinesses]);
 
-  // Helper to convert price level to numeric value
   const getPriceValue = (priceLevel: string): number => {
     switch (priceLevel) {
       case "$":
@@ -219,7 +213,6 @@ export function BusinessFinder() {
     }
   };
 
-  // Filter businesses based on search and category, then sort based on selected option
   const filteredBusinesses = useMemo(() => {
     const bookmarkedIds = getBookmarkedIds();
 
@@ -296,7 +289,6 @@ export function BusinessFinder() {
     showBookmarkedOnly,
   ]);
 
-  // Handle user location detection and fetch nearby businesses
   const handleLocateUser = async () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(

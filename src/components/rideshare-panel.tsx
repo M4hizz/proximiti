@@ -45,7 +45,6 @@ import {
 import { Icon } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// ─── Leaflet icons ───────────────────────────────────────────────────────────
 
 const originIcon = new Icon({
   iconUrl:
@@ -75,7 +74,6 @@ interface SelectedLocation {
   name: string;
 }
 
-// ─── Smart location search input ─────────────────────────────────────────────
 
 function LocationSearchInput({
   label,
@@ -102,7 +100,6 @@ function LocationSearchInput({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<LocationSearchEngine | null>(null);
 
-  // Create / update search engine with user location
   useEffect(() => {
     if (!engineRef.current) {
       engineRef.current = new LocationSearchEngine(
@@ -119,7 +116,6 @@ function LocationSearchInput({
     if (!isFocused) setQuery(value);
   }, [value, isFocused]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -132,7 +128,6 @@ function LocationSearchInput({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Debounced smart search
   useEffect(() => {
     if (query.length < 2) {
       setResults([]);
@@ -338,7 +333,6 @@ function ResultRow({
   );
 }
 
-// ─── Live route preview map ───────────────────────────────────────────────────
 
 interface RoutePolyline {
   points: [number, number][];
@@ -393,7 +387,6 @@ function RoutePreviewMap({
       ? [dest.lat, dest.lng]
       : defaultCenter;
 
-  // Fetch OSRM route when both points are valid
   useEffect(() => {
     if (!origin || !dest || origin.lat === 0 || dest.lat === 0) {
       setRoute(null);
@@ -504,7 +497,6 @@ function RoutePreviewMap({
   );
 }
 
-// ─── Status helpers ──────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<
   RideshareStatus,
@@ -555,7 +547,6 @@ function StatusBadge({ status }: { status: RideshareStatus }) {
   );
 }
 
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 type View = "list" | "create" | "detail";
 
@@ -565,7 +556,6 @@ interface RidesharePanelProps {
   userLocation: [number, number] | null;
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
 
 export function RidesharePanel({
   isOpen,
@@ -582,7 +572,6 @@ export function RidesharePanel({
   const [actionLoading, setActionLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ─── Data fetching ─────────────────────────────────────────────────────────
 
   const fetchRideshares = useCallback(async () => {
     try {
@@ -604,12 +593,10 @@ export function RidesharePanel({
     }
   }, []);
 
-  // ─── Polling ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isOpen || !user) return;
 
-    // Initial fetch
     fetchRideshares();
 
     // Poll every 3 seconds
@@ -625,7 +612,6 @@ export function RidesharePanel({
     };
   }, [isOpen, user, fetchRideshares, fetchRideDetail, selectedRide]);
 
-  // ─── Actions ───────────────────────────────────────────────────────────────
 
   const handleAction = async (action: () => Promise<any>) => {
     setActionLoading(true);
@@ -675,7 +661,6 @@ export function RidesharePanel({
     }
   };
 
-  // ─── Render ────────────────────────────────────────────────────────────────
 
   if (!isOpen) return null;
 
@@ -796,7 +781,6 @@ export function RidesharePanel({
   );
 }
 
-// ─── Ride List ───────────────────────────────────────────────────────────────
 
 function RideList({
   rideshares,
@@ -947,7 +931,6 @@ function RideList({
   );
 }
 
-// ─── Create Ride Form ────────────────────────────────────────────────────────
 
 function CreateRideForm({
   userLocation,
@@ -1122,7 +1105,6 @@ function CreateRideForm({
   );
 }
 
-// ─── Ride Detail ─────────────────────────────────────────────────────────────
 
 function RideDetail({
   ride,

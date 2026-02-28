@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import type { Business } from "@/lib/businesses";
 import "leaflet/dist/leaflet.css";
 
-// ── Leaflet marker icons ──────────────────────────────────────────────────────
 const businessIcon = new Icon({
   iconUrl:
     "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
@@ -43,7 +42,6 @@ const userIcon = new Icon({
   shadowSize: [41, 41],
 });
 
-// ── OSRM route helpers ────────────────────────────────────────────────────────
 interface RouteInfo {
   polyline: [number, number][]; // [lat, lng] pairs for Leaflet
   distanceM: number;
@@ -90,7 +88,6 @@ function formatDuration(s: number): string {
   return `${Math.floor(mins / 60)} h ${mins % 60} min`;
 }
 
-// ── Auto-fit bounds ───────────────────────────────────────────────────────────
 function MapBounds({ positions }: { positions: [number, number][] }) {
   const map = useMap();
   useEffect(() => {
@@ -103,7 +100,6 @@ function MapBounds({ positions }: { positions: [number, number][] }) {
   return null;
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
 interface DirectionsModalProps {
   business: Business;
   onClose: () => void;
@@ -158,7 +154,6 @@ export function DirectionsModal({ business, onClose }: DirectionsModalProps) {
       .finally(() => setLoadingRoute(false));
   }, [userLocation, business.lat, business.lng]);
 
-  // Map centre & bound positions
   const mapCenter: LatLngExpression = userLocation
     ? [
         (userLocation[0] + business.lat) / 2,
@@ -172,7 +167,6 @@ export function DirectionsModal({ business, onClose }: DirectionsModalProps) {
       ? [userLocation, businessPos]
       : [businessPos];
 
-  // Close on backdrop click
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -230,7 +224,6 @@ export function DirectionsModal({ business, onClose }: DirectionsModalProps) {
         {/* ── Map area ── */}
         <div className="relative flex-1" style={{ minHeight: "420px" }}>
           {loadingLocation ? (
-            // Location loading state
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-50 dark:bg-gray-800">
               <Loader2 className="w-8 h-8 animate-spin text-cherry-rose" />
               <p className="text-sm text-gray-500 dark:text-gray-400">

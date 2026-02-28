@@ -1,7 +1,3 @@
-/**
- * Rideshare API service – handles all rideshare lobby operations.
- */
-
 import authApi from "./authApi";
 
 export type RideshareStatus =
@@ -71,8 +67,6 @@ class RideshareApiService {
     return data;
   }
 
-  // ─── List ────────────────────────────────────────────────────────────────────
-
   /** Get active rideshares (waiting + accepted) */
   async getActiveRideshares(): Promise<{ rideshares: Rideshare[] }> {
     return this.request("/rideshares");
@@ -98,8 +92,6 @@ class RideshareApiService {
       `/rideshares/code/${encodeURIComponent(code.toUpperCase().trim())}`,
     );
   }
-
-  // ─── Actions ─────────────────────────────────────────────────────────────────
 
   /** Create a new rideshare lobby */
   async createRideshare(data: {

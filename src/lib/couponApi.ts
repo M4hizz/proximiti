@@ -1,8 +1,3 @@
-/**
- * Coupon API client functions
- * Handles all coupon-related API calls
- */
-
 import authApi from "./authApi";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
@@ -54,11 +49,6 @@ export interface UpdateCouponData {
   isPremiumOnly?: boolean;
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
-
-/**
- * Get active coupons for a business
- */
 export async function getBusinessCoupons(
   businessId: string,
 ): Promise<Coupon[]> {
@@ -70,9 +60,6 @@ export async function getBusinessCoupons(
   return data.coupons ?? [];
 }
 
-/**
- * Get active coupon count for a business (for badge display)
- */
 export async function getBusinessCouponCount(
   businessId: string,
 ): Promise<number> {
@@ -86,10 +73,6 @@ export async function getBusinessCouponCount(
   return data.count;
 }
 
-/**
- * Fetch coupon counts for multiple businesses in a single request.
- * Returns a map of businessId → count (missing ids have 0 coupons).
- */
 export async function getBatchCouponCounts(
   businessIds: string[],
 ): Promise<Record<string, number>> {
@@ -103,9 +86,6 @@ export async function getBatchCouponCounts(
   return data.counts ?? {};
 }
 
-/**
- * Redeem a coupon
- */
 export async function redeemCoupon(couponCode: string): Promise<{
   message: string;
   coupon: Coupon;
@@ -129,11 +109,6 @@ export async function redeemCoupon(couponCode: string): Promise<{
   return data;
 }
 
-// ─── Admin API ───────────────────────────────────────────────────────────────
-
-/**
- * Get all coupons (admin only)
- */
 export async function getAllCoupons(businessId?: string): Promise<Coupon[]> {
   const url = businessId
     ? `${API_URL}/admin/coupons?businessId=${businessId}`
@@ -152,9 +127,6 @@ export async function getAllCoupons(businessId?: string): Promise<Coupon[]> {
   return data.coupons ?? [];
 }
 
-/**
- * Create a new coupon (admin only)
- */
 export async function createCoupon(
   businessId: string,
   couponData: CreateCouponData,
@@ -178,9 +150,6 @@ export async function createCoupon(
   return data.coupon;
 }
 
-/**
- * Update a coupon (admin only)
- */
 export async function updateCoupon(
   couponId: string,
   updates: UpdateCouponData,
@@ -204,9 +173,6 @@ export async function updateCoupon(
   return data.coupon;
 }
 
-/**
- * Delete a coupon (admin only)
- */
 export async function deleteCoupon(couponId: string): Promise<void> {
   const response = await fetch(`${API_URL}/coupons/${couponId}`, {
     method: "DELETE",
@@ -220,11 +186,6 @@ export async function deleteCoupon(couponId: string): Promise<void> {
   }
 }
 
-// ─── Helper Functions ────────────────────────────────────────────────────────
-
-/**
- * Format discount value for display
- */
 export function formatDiscount(coupon: Coupon): string {
   if (coupon.discountType === "percentage") {
     return `${coupon.discountValue}% OFF`;
@@ -233,16 +194,10 @@ export function formatDiscount(coupon: Coupon): string {
   }
 }
 
-/**
- * Check if a coupon is expired
- */
 export function isCouponExpired(coupon: Coupon): boolean {
   return new Date(coupon.endDate) < new Date();
 }
 
-/**
- * Check if a coupon is valid (active, within date range, has usage available)
- */
 export function isCouponValid(coupon: Coupon): boolean {
   const now = new Date();
   const start = new Date(coupon.startDate);
@@ -256,9 +211,6 @@ export function isCouponValid(coupon: Coupon): boolean {
   );
 }
 
-/**
- * Check if coupon expires within 48 hours (for "Limited Time" badge)
- */
 export function isExpiringSoon(coupon: Coupon): boolean {
   const end = new Date(coupon.endDate);
   const now = new Date();
@@ -266,9 +218,6 @@ export function isExpiringSoon(coupon: Coupon): boolean {
   return hoursRemaining > 0 && hoursRemaining <= 48;
 }
 
-/**
- * Format date for display
- */
 export function formatCouponDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleDateString("en-US", {

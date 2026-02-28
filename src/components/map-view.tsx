@@ -13,7 +13,6 @@ import type { Business } from "@/lib/businesses";
 import { Loader2, X } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
-// ── Marker icons ──────────────────────────────────────────────────────────────
 const selectedIcon = new Icon({
   iconUrl:
     "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
@@ -36,7 +35,6 @@ const blueIcon = new Icon({
   shadowSize: [41, 41],
 });
 
-// ── OSRM route helpers ────────────────────────────────────────────────────────
 interface RouteInfo {
   polyline: [number, number][];
   distanceM: number;
@@ -74,7 +72,6 @@ function formatDuration(s: number) {
     : `${Math.floor(mins / 60)} h ${mins % 60} min`;
 }
 
-// ── Map controller ────────────────────────────────────────────────────────────
 function MapController({
   center,
   selectedBusiness,
@@ -113,7 +110,6 @@ function MapController({
   return null;
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
 interface MapViewProps {
   businesses: Business[];
   selectedBusiness: Business | null;
@@ -125,7 +121,6 @@ interface MapViewProps {
   onClearDirections?: () => void;
 }
 
-// ── MapView ───────────────────────────────────────────────────────────────────
 export function MapView({
   businesses,
   selectedBusiness,
@@ -137,7 +132,6 @@ export function MapView({
   const defaultCenter: [number, number] = [43.7182, -79.3762];
   const center = userLocation || defaultCenter;
 
-  // Route state (managed internally)
   const [routeUserPos, setRouteUserPos] = useState<[number, number] | null>(
     null,
   );

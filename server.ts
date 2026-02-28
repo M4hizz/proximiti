@@ -10,7 +10,6 @@ import dotenv from "dotenv";
 import { Filter } from "bad-words";
 import Stripe from "stripe";
 
-// Import our authentication system
 import {
   authenticate,
   optionalAuthenticate,
@@ -23,10 +22,8 @@ import {
 import authRoutes from "./src/lib/routes/auth";
 import db from "./src/lib/database";
 
-// Load environment variables
 dotenv.config();
 
-// ─── Stripe Initialization ───────────────────────────────────────────────────
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
   ? new Stripe(stripeSecretKey, { apiVersion: "2026-01-28.clover" })
@@ -41,10 +38,8 @@ if (!stripe) {
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Profanity filter
 const profanityFilter = new Filter();
 
-// Security middleware
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -78,7 +73,6 @@ app.use(
 
 app.use(securityHeaders);
 
-// CORS configuration
 const corsOptions: CorsOptions = {
   origin: function (
     origin: string | undefined,
@@ -130,14 +124,11 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true }));
 
-// Global rate limiting
 const globalRateLimit = createRateLimiter(15 * 60 * 1000, 500); // 500 requests per 15 minutes
 app.use(globalRateLimit);
 
-// Extract token from cookies/headers for all routes
 app.use(extractToken);
 
-// Health check endpoint (no auth required)
 app.get("/", (req, res) => {
   res.json({
     message: "Proximiti API is running",
@@ -147,7 +138,6 @@ app.get("/", (req, res) => {
   });
 });
 
-// Public health check
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "OK",
@@ -157,10 +147,8 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Authentication routes (public)
 app.use("/api", authRoutes);
 
-// Protected business data routes
 app.get(
   "/api/businesses",
   optionalAuthenticate,
@@ -207,7 +195,6 @@ app.get(
   },
 );
 
-// Protected route - user profile management
 app.get(
   "/api/profile",
   authenticate,
@@ -263,7 +250,6 @@ app.put(
   },
 );
 
-// Admin-only routes
 app.get(
   "/api/admin/users",
   authenticate,
@@ -391,7 +377,6 @@ app.delete(
   },
 );
 
-// Admin: permanently delete a user account
 app.delete(
   "/api/admin/users/:id",
   authenticate,
@@ -424,12 +409,10 @@ app.delete(
   },
 );
 
-// ─── Reviews API ─────────────────────────────────────────────────────────────
 
 // Threshold: once Proximiti review count >= this, Google reviews are phased out
 const PROXIMITI_PHASE_OUT_THRESHOLD = 10;
 
-// Fetch Proximiti reviews for a business
 app.get(
   "/api/reviews/:businessId",
   optionalAuthenticate,
@@ -475,7 +458,6 @@ app.get(
   },
 );
 
-// Submit a new Proximiti review (auth required, 1 per user per business)
 app.post(
   "/api/reviews/:businessId",
   authenticate,
@@ -537,7 +519,6 @@ app.post(
   },
 );
 
-// Toggle "Found this helpful?" (auth required)
 app.post(
   "/api/reviews/:reviewId/helpful",
   authenticate,
@@ -585,7 +566,6 @@ app.get(
           .json({ error: "name, lat and lng are required" });
       }
 
-      // ── SerpAPI path – unlimited paginated reviews ──────────────────────────
       if (serpApiKey) {
         let dataId: string | null = existingDataId || null;
         let googleRating: number | null = null;
@@ -673,7 +653,6 @@ app.get(
         });
       }
 
-      // ── Google Places API fallback (max 5 reviews) ──────────────────────────
       if (!placesApiKey) {
         return res
           .status(503)
@@ -1056,7 +1035,6 @@ app.get(
   },
 );
 
-// ─── OSM Text Search (free Overpass-based) ─────────────────────────────────
 // Searches for named POIs matching a query near a location.
 // Works entirely free — no API key needed.
 app.get(
@@ -1481,7 +1459,6 @@ app.get(
   },
 );
 
-// ─── AI Search API ───────────────────────────────────────────────────────────
 
 const aiSearchRateLimit = createRateLimiter(60 * 1000, 30); // 30 requests/minute
 
@@ -1517,7 +1494,6 @@ app.post(
       const searchLat = typeof lat === "number" && !isNaN(lat) ? lat : 43.6532;
       const searchLng = typeof lng === "number" && !isNaN(lng) ? lng : -79.3832;
 
-      // ── Step 1: Generate search queries from the natural-language input ─────
       // We do this algorithmically to save the Gemini quota for ranking.
       // Google Places Text Search handles natural language very well natively.
       const rawQuery = query.trim().slice(0, 500);
@@ -1578,7 +1554,6 @@ app.post(
         searchQueries.push(cleanQuery);
       }
 
-      // ── Step 2: Fetch businesses from Google Places Text Search ─────────────
       // Google handles natural language natively — "bakery wedding cakes" works great.
 
       const PLACES_TYPE_CATEGORY: Record<string, string> = {
@@ -1817,7 +1792,6 @@ app.post(
         );
       }
 
-      // ── Step 3: Use Gemini to rank and explain results ──────────────────────
       // Instead of manual scoring, let Gemini (which understands the query deeply)
       // pick the best matches and explain why.
 
@@ -1962,7 +1936,6 @@ RULES:
           }));
       }
 
-      // ── Step 4: Build and return response ───────────────────────────────────
       const results = rankings.map((r) => {
         const place = candidates[r.index - 1];
         return {
@@ -2002,9 +1975,7 @@ RULES:
   },
 );
 
-// ─── End Reviews API ──────────────────────────────────────────────────────────
 
-// Error handling middleware
 app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error:", error);
 
@@ -2024,9 +1995,7 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-// ─── Coupons API ─────────────────────────────────────────────────────────────
 
-// Get active coupons for a business (public)
 app.get("/api/businesses/:id/coupons", async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
@@ -2074,7 +2043,6 @@ app.get(
   },
 );
 
-// Redeem a coupon (public)
 app.post("/api/coupons/redeem", async (req: Request, res: Response) => {
   try {
     const { couponCode } = req.body;
@@ -2099,9 +2067,7 @@ app.post("/api/coupons/redeem", async (req: Request, res: Response) => {
   }
 });
 
-// ─── Admin Coupon Routes ──────────────────────────────────────────────────────
 
-// Get all coupons (admin only)
 app.get(
   "/api/admin/coupons",
   authenticate,
@@ -2125,7 +2091,6 @@ app.get(
   },
 );
 
-// Create a new coupon (admin only)
 app.post(
   "/api/businesses/:id/coupons",
   authenticate,
@@ -2231,7 +2196,6 @@ app.post(
   },
 );
 
-// Update a coupon (admin only)
 app.put(
   "/api/coupons/:couponId",
   authenticate,
@@ -2335,7 +2299,6 @@ app.put(
   },
 );
 
-// Delete a coupon (admin only)
 app.delete(
   "/api/coupons/:couponId",
   authenticate,
@@ -2357,7 +2320,6 @@ app.delete(
   },
 );
 
-// ─── Rideshare API ─────────────────────────────────────────────────────────
 
 // Get all active rideshares (public listing; mine=true requires auth)
 app.get(
@@ -2417,7 +2379,6 @@ app.get(
   },
 );
 
-// Get a specific rideshare with passengers
 app.get(
   "/api/rideshares/:id",
   authenticate,
@@ -2438,7 +2399,6 @@ app.get(
   },
 );
 
-// Create a new rideshare
 app.post(
   "/api/rideshares",
   authenticate,
@@ -2498,7 +2458,6 @@ app.post(
   },
 );
 
-// Join a rideshare as passenger
 app.post(
   "/api/rideshares/:id/join",
   authenticate,
@@ -2521,7 +2480,6 @@ app.post(
   },
 );
 
-// Leave a rideshare
 app.post(
   "/api/rideshares/:id/leave",
   authenticate,
@@ -2586,7 +2544,6 @@ app.post(
   },
 );
 
-// Complete the ride
 app.post(
   "/api/rideshares/:id/complete",
   authenticate,
@@ -2608,7 +2565,6 @@ app.post(
   },
 );
 
-// Cancel a rideshare
 app.post(
   "/api/rideshares/:id/cancel",
   authenticate,
@@ -2630,7 +2586,6 @@ app.post(
   },
 );
 
-// ─── Payments / Premium API ───────────────────────────────────────────────────
 
 /**
  * POST /api/payments/create-checkout-session
@@ -2983,7 +2938,6 @@ app.use((_req: Request, res: Response) => {
   });
 });
 
-// Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("SIGTERM received, shutting down gracefully");
   db.close();

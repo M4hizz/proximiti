@@ -1,7 +1,3 @@
-/**
- * Frontend API service for the Proximiti review system and Google Places proxy.
- */
-
 import authApi from "./authApi";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
@@ -25,8 +21,6 @@ async function request<T>(
   return data as T;
 }
 
-// ─── Proximiti Review Types ───────────────────────────────────────────────────
-
 export interface ProximitiReview {
   id: string;
   businessId: string;
@@ -49,8 +43,6 @@ export interface ReviewsResponse {
   hasMore: boolean;
 }
 
-// ─── Google Review Types ──────────────────────────────────────────────────────
-
 export interface GoogleReview {
   author_name: string;
   author_url?: string;
@@ -68,8 +60,6 @@ export interface GoogleReviewsResponse {
   totalRatings: number | null;
   nextPageToken: string | null;
 }
-
-// ─── Proximiti Reviews ────────────────────────────────────────────────────────
 
 export async function fetchProximitiReviews(
   businessId: string,
@@ -97,8 +87,6 @@ export async function toggleHelpful(
 ): Promise<{ helpful: boolean }> {
   return request(`/reviews/${reviewId}/helpful`, { method: "POST" });
 }
-
-// ─── Google Reviews ───────────────────────────────────────────────────────────
 
 export async function fetchGoogleReviews(
   name: string,

@@ -10,7 +10,6 @@ import { LoginPage } from "@/pages/LoginPage";
 import { BusinessFinder } from "@/pages/BusinessFinder";
 import authApi, { type User } from "@/lib/authApi";
 
-// Theme Context
 type Theme = "light" | "dark";
 
 interface ThemeContextType {
@@ -54,7 +53,6 @@ function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Auth Context
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -84,7 +82,6 @@ function AuthProvider({ children }: AuthProviderProps) {
 
   const isAuthenticated = !!user;
 
-  // Check if user is logged in on app start
   useEffect(() => {
     checkAuthStatus();
   }, []);

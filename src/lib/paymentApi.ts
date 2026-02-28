@@ -1,8 +1,3 @@
-/**
- * Payment API client
- * Handles Stripe checkout and demo upgrade/downgrade
- */
-
 import authApi from "./authApi";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
@@ -12,10 +7,6 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-/**
- * Create a Stripe Checkout session and redirect to Stripe payment page.
- * Requires the user to be logged in.
- */
 export async function startStripeCheckout(
   planId: "essential" | "enterprise" = "essential",
 ): Promise<void> {
@@ -32,7 +23,6 @@ export async function startStripeCheckout(
     throw new Error(data.error || "Failed to start checkout");
   }
 
-  // Redirect to Stripe Checkout
   if (data.url) {
     window.location.href = data.url;
   } else {
@@ -40,10 +30,6 @@ export async function startStripeCheckout(
   }
 }
 
-/**
- * Hackathon demo: instantly mark the current user as Premium.
- * Returns the updated user object.
- */
 export async function demoUpgrade(
   planType: "essential" | "enterprise" = "essential",
 ): Promise<{
@@ -72,10 +58,6 @@ export async function demoUpgrade(
   return data.user;
 }
 
-/**
- * Cancel the current user's own subscription.
- * Returns the updated user object.
- */
 export async function cancelSubscription(): Promise<{
   id: string;
   email: string;
@@ -100,9 +82,6 @@ export async function cancelSubscription(): Promise<{
   return data.user;
 }
 
-/**
- * Hackathon demo: revert the current user back to free tier.
- */
 export async function demoDowngrade(): Promise<void> {
   const response = await fetch(`${API_URL}/payments/demo-downgrade`, {
     method: "DELETE",

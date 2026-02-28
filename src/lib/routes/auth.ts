@@ -14,24 +14,21 @@ import QRCode from "qrcode";
 
 const router = Router();
 
-// Google OAuth client
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
 );
 
-// Rate limiting for auth endpoints
-const authRateLimit = createRateLimiter(15 * 60 * 1000, 50); // 50 requests per 15 minutes
+const authRateLimit = createRateLimiter(15 * 60 * 1000, 50);
 
 interface GoogleTokenData {
   email: string;
   name: string;
   picture?: string;
-  sub: string; // Google user ID
+  sub: string;
   email_verified: boolean;
 }
 
-// Set secure cookie options
 const getCookieOptions = (maxAge: number = 7 * 24 * 60 * 60 * 1000) => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
@@ -44,7 +41,6 @@ const getCookieOptions = (maxAge: number = 7 * 24 * 60 * 60 * 1000) => ({
   path: "/",
 });
 
-// Google OAuth sign-in/sign-up
 router.post(
   "/auth/google",
   authRateLimit,
@@ -59,7 +55,6 @@ router.post(
         });
       }
 
-      // Verify the token with Google
       let ticket;
       try {
         ticket = await googleClient.verifyIdToken({
@@ -90,7 +85,6 @@ router.post(
         email_verified: payload.email_verified || false,
       };
 
-      // Check if email is verified
       if (!googleData.email_verified) {
         return res.status(400).json({
           error: "Email not verified",
@@ -101,7 +95,6 @@ router.post(
       let user = await db.getUserByGoogleId(googleData.sub);
 
       if (!user) {
-        // Check if user exists with same email but different provider
         const existingUser = await db.getUserByEmail(googleData.email);
         if (existingUser) {
           return res.status(409).json({
@@ -111,7 +104,6 @@ router.post(
           });
         }
 
-        // Create new user
         try {
           user = await db.createUser({
             email: googleData.email,
@@ -131,8 +123,6 @@ router.post(
         }
       }
 
-      // Generate JWT tokens (Google OAuth)
-      // If TOTP is enabled, issue a challenge token instead
       if (user!.totpEnabled) {
         const challengeToken = jwt.sign(
           { userId: user!.id, challenge: true },
@@ -150,14 +140,12 @@ router.post(
         user!,
       );
 
-      // Set secure cookies
       const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000); // 7 days
       const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000); // 30 days
 
       res.cookie("accessToken", accessToken, accessCookieOptions);
       res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
-      // Send success response
       res.status(200).json({
         message: "Authentication successful",
         user: {
@@ -187,7 +175,6 @@ router.post(
   },
 );
 
-// Traditional email/password login (kept for backward compatibility)
 router.post(
   "/auth/login",
   authRateLimit,
@@ -217,7 +204,6 @@ router.post(
         user.isVerified = true;
       }
 
-      // If TOTP is enabled, issue a short-lived challenge token instead of full auth
       if (user.totpEnabled) {
         const challengeToken = jwt.sign(
           { userId: user.id, challenge: true },
@@ -234,11 +220,9 @@ router.post(
         });
       }
 
-      // Generate JWT tokens
       const { accessToken, refreshToken } =
         await AuthService.generateTokens(user);
 
-      // Set secure cookies
       const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000);
       const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
 
@@ -273,7 +257,6 @@ router.post(
   },
 );
 
-// Register new user with email/password
 router.post(
   "/auth/register",
   authRateLimit,
@@ -288,7 +271,6 @@ router.post(
         });
       }
 
-      // Basic password validation
       if (password.length < 8) {
         return res.status(400).json({
           error: "Weak password",
@@ -337,7 +319,6 @@ router.post(
   },
 );
 
-// Refresh access token
 router.post(
   "/auth/refresh",
   async (req: AuthenticatedRequest, res: Response) => {
@@ -354,7 +335,6 @@ router.post(
       const { accessToken, refreshToken: newRefreshToken } =
         await AuthService.refreshToken(refreshToken);
 
-      // Set new secure cookies
       const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000);
       const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
 
@@ -378,18 +358,15 @@ router.post(
   },
 );
 
-// Logout
 router.post(
   "/auth/logout",
   optionalAuthenticate,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      // Revoke current session if user is authenticated
       if (req.sessionId) {
         await AuthService.revokeToken(req.sessionId);
       }
 
-      // Clear cookies
       res.clearCookie("accessToken", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -417,7 +394,6 @@ router.post(
   },
 );
 
-// Logout from all devices
 router.post(
   "/auth/logout-all",
   optionalAuthenticate,
@@ -430,10 +406,8 @@ router.post(
         });
       }
 
-      // Revoke all user sessions
       await AuthService.revokeAllUserTokens(req.user.id);
 
-      // Clear cookies
       res.clearCookie("accessToken", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -461,7 +435,6 @@ router.post(
   },
 );
 
-// Get current user profile
 router.get(
   "/auth/me",
   authenticate,
@@ -502,9 +475,6 @@ router.get(
   },
 );
 
-// ─── TOTP / Google Authenticator Routes ──────────────────────────────────────
-
-// Step 1: Generate a TOTP secret + QR code for the authenticated user
 router.post(
   "/auth/totp/setup",
   authRateLimit,
@@ -522,7 +492,6 @@ router.post(
         });
       }
 
-      // Generate a fresh TOTP secret
       const secret = generateSecret();
       const appName = process.env.APP_NAME || "Proximiti";
       const otpAuthUrl = generateURI({
@@ -531,10 +500,8 @@ router.post(
         secret,
       });
 
-      // Generate QR code as a data URL (PNG base64)
       const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl, { width: 256 });
 
-      // Store the secret temporarily (not yet enabled) so we can verify the next step
       await db.updateUser(req.user.id, {
         totpSecret: secret,
         totpEnabled: false,
@@ -552,7 +519,6 @@ router.post(
   },
 );
 
-// Step 2: Confirm the code and enable TOTP
 router.post(
   "/auth/totp/enable",
   authRateLimit,
@@ -591,7 +557,6 @@ router.post(
       // authenticated features without re-verifying with the authenticator app.
       await AuthService.revokeAllUserTokens(req.user.id);
 
-      // Clear session cookies on this device too
       const expireCookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -613,7 +578,6 @@ router.post(
   },
 );
 
-// Disable TOTP (requires a valid current code)
 router.post(
   "/auth/totp/disable",
   authRateLimit,
@@ -662,7 +626,6 @@ router.post(
   },
 );
 
-// Complete login when TOTP is required (accepts a challengeToken + code)
 router.post(
   "/auth/totp/login",
   authRateLimit,
@@ -680,7 +643,6 @@ router.post(
         });
       }
 
-      // Verify challenge token
       let payload: any;
       try {
         payload = jwt.verify(challengeToken, process.env.JWT_SECRET!, {
@@ -716,7 +678,6 @@ router.post(
         });
       }
 
-      // Issue full tokens
       const { accessToken, refreshToken } =
         await AuthService.generateTokens(user);
 

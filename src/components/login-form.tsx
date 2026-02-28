@@ -8,7 +8,6 @@ import authApi from "@/lib/authApi";
 import { Captcha } from "@/components/ui/captcha";
 import { TwoFactorChallenge } from "@/components/two-factor-challenge";
 
-// Declare Google type for TypeScript
 declare global {
   interface Window {
     google: {
@@ -153,10 +152,9 @@ export function LoginForm() {
     try {
       if (isLogin) {
         const result = await authApi.login({ email, password });
-        // Handle TOTP challenge
         if ("totpRequired" in result && result.totpRequired) {
           setTotpChallengeToken(result.challengeToken);
-          return; // Don't reset loading/captcha yet – we're showing the challenge screen
+          return;
         }
         auth.login(result.user);
         navigate("/");

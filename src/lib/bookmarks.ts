@@ -1,13 +1,5 @@
-/**
- * Bookmark management utilities
- * Handles localStorage persistence of bookmarked businesses
- */
-
 const BOOKMARKS_KEY = "proximiti_bookmarks";
 
-/**
- * Get all bookmarked business IDs from localStorage
- */
 export function getBookmarkedIds(): string[] {
   try {
     const stored = localStorage.getItem(BOOKMARKS_KEY);
@@ -17,16 +9,10 @@ export function getBookmarkedIds(): string[] {
   }
 }
 
-/**
- * Check if a business is bookmarked
- */
 export function isBookmarked(businessId: string): boolean {
   return getBookmarkedIds().includes(businessId);
 }
 
-/**
- * Add a business to bookmarks
- */
 export function addBookmark(businessId: string): void {
   const bookmarks = getBookmarkedIds();
   if (!bookmarks.includes(businessId)) {
@@ -35,18 +21,12 @@ export function addBookmark(businessId: string): void {
   }
 }
 
-/**
- * Remove a business from bookmarks
- */
 export function removeBookmark(businessId: string): void {
   const bookmarks = getBookmarkedIds();
   const filtered = bookmarks.filter((id) => id !== businessId);
   localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(filtered));
 }
 
-/**
- * Toggle bookmark for a business
- */
 export function toggleBookmark(businessId: string): boolean {
   if (isBookmarked(businessId)) {
     removeBookmark(businessId);

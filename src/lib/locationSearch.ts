@@ -1,22 +1,7 @@
-/**
- * Smart Location Search Engine
- *
- * Combines three data sources for Google Maps-like location finding:
- * 1. Local app businesses (instant, sorted by distance)
- * 2. Nominatim geocoding (addresses, landmarks, cities)
- * 3. OSM Overpass text search (real-world POIs like "Starbucks", sorted by distance)
- *
- * Usage:
- *   const engine = new LocationSearchEngine(userLat, userLng);
- *   const results = await engine.search("starbucks");
- */
-
 import { businesses as appBusinesses, calculateDistance } from "./businesses";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_URL ?? "http://localhost:3001/api";
-
-// ─── Result types ────────────────────────────────────────────────────────────
 
 export type LocationResultSource = "app" | "osm" | "nominatim" | "google";
 
@@ -28,13 +13,9 @@ export interface LocationResult {
   lng: number;
   distanceKm: number | null;
   source: LocationResultSource;
-  /** Category emoji for display */
   icon: string;
-  /** Optional: type for POIs (e.g. "cafe", "restaurant") */
   type?: string;
 }
-
-// ─── Category → emoji ────────────────────────────────────────────────────────
 
 const CATEGORY_EMOJI: Record<string, string> = {
   food: "🍔",
@@ -72,8 +53,6 @@ function getEmoji(type?: string, category?: string): string {
   return "📍";
 }
 
-// ─── Haversine distance ──────────────────────────────────────────────────────
-
 function distanceKm(
   lat1: number,
   lng1: number,
@@ -82,8 +61,6 @@ function distanceKm(
 ): number {
   return calculateDistance(lat1, lng1, lat2, lng2);
 }
-
-// ─── Nominatim types ─────────────────────────────────────────────────────────
 
 interface NominatimResult {
   place_id: string;
@@ -103,8 +80,6 @@ interface NominatimResult {
   };
 }
 
-// ─── Smart deduplication ─────────────────────────────────────────────────────
-
 function dedupeResults(results: LocationResult[]): LocationResult[] {
   const seen = new Map<string, LocationResult>();
   for (const r of results) {
@@ -123,8 +98,6 @@ function dedupeResults(results: LocationResult[]): LocationResult[] {
   return Array.from(seen.values());
 }
 
-// ─── Search engine class ─────────────────────────────────────────────────────
-
 export class LocationSearchEngine {
   private userLat: number | null;
   private userLng: number | null;
@@ -140,10 +113,6 @@ export class LocationSearchEngine {
     this.userLng = lng;
   }
 
-  /**
-   * Main search — returns combined results from all sources, sorted by distance.
-   * Fast items (local businesses) return instantly; network results stream in.
-   */
   async search(
     query: string,
     opts?: { signal?: AbortSignal },
@@ -183,8 +152,6 @@ export class LocationSearchEngine {
     return all.slice(0, 15);
   }
 
-  // ─── Local businesses (instant) ───────────────────────────────────────────
-
   searchLocalBusinesses(query: string): LocationResult[] {
     const q = query.toLowerCase();
     const matches = appBusinesses.filter(
@@ -210,8 +177,6 @@ export class LocationSearchEngine {
       type: b.category,
     }));
   }
-
-  // ─── OSM Overpass text search (real-world "Starbucks" etc.) ────────────────
 
   private async searchOSM(
     query: string,
@@ -244,8 +209,6 @@ export class LocationSearchEngine {
       return [];
     }
   }
-
-  // ─── Nominatim geocoding (addresses, landmarks, cities) ───────────────────
 
   private async searchNominatim(
     query: string,
@@ -307,8 +270,6 @@ export class LocationSearchEngine {
     }
   }
 }
-
-// ─── Format helpers for UI ───────────────────────────────────────────────────
 
 export function formatDistance(km: number | null): string {
   if (km == null) return "";

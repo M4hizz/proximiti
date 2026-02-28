@@ -39,11 +39,6 @@ const SOURCE_META: Record<
   },
 };
 
-/**
- * Search bar component with smart multi-source location search.
- * Combines Proximiti businesses, OSM POIs, and Nominatim geocoding — sorted
- * by distance when the user's location is known.
- */
 export function SearchBar({
   value,
   onChange,
@@ -61,14 +56,12 @@ export function SearchBar({
   const locationInputRef = useRef<HTMLInputElement>(null);
   const engineRef = useRef(new LocationSearchEngine());
 
-  // Keep engine location in sync
   useEffect(() => {
     if (userLocation) {
       engineRef.current.updateLocation(userLocation[0], userLocation[1]);
     }
   }, [userLocation]);
 
-  // Sync the location input whenever the parent pushes a new display label
   useEffect(() => {
     if (
       locationDisplay !== undefined &&
@@ -79,7 +72,6 @@ export function SearchBar({
     }
   }, [locationDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -93,7 +85,6 @@ export function SearchBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Debounced search via LocationSearchEngine
   useEffect(() => {
     if (locationQuery.length < 2) {
       setResults([]);

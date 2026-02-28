@@ -18,9 +18,6 @@ interface DealsSectionProps {
   businessId: string;
 }
 
-/**
- * Displays active coupons for a business
- */
 export function DealsSection({ businessId }: DealsSectionProps) {
   const { user } = useAuth();
   const [coupons, setCoupons] = useState<Coupon[]>([]);

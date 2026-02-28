@@ -3,7 +3,6 @@ import type { Request, Response, NextFunction } from "express";
 import db, { type User } from "./database";
 import crypto from "crypto";
 
-// Extend Express Request to include user
 interface AuthenticatedRequest extends Request {
   user?: User;
   sessionId?: string;
@@ -13,7 +12,7 @@ interface JWTPayload {
   userId: string;
   email: string;
   role: "user" | "admin";
-  jti: string; // JWT ID for session management
+  jti: string;
   iat?: number;
   exp?: number;
 }
@@ -62,7 +61,6 @@ class AuthService {
       refreshSignOptions,
     );
 
-    // Store session in database
     const expiresAt = new Date();
     expiresAt.setTime(
       expiresAt.getTime() + this.parseExpiration(this.jwtExpiresIn),
@@ -111,7 +109,6 @@ class AuthService {
         return null;
       }
 
-      // Check if session is still valid in database
       if (!(await db.isSessionValid(payload.jti))) {
         return null;
       }
@@ -151,7 +148,6 @@ class AuthService {
   }
 }
 
-// Middleware to extract token from cookies or Authorization header
 const extractToken = (
   req: AuthenticatedRequest,
   _res: Response,
@@ -159,12 +155,10 @@ const extractToken = (
 ) => {
   let token = null;
 
-  // First, try to get token from httpOnly cookie (preferred for security)
   if (req.cookies && req.cookies.accessToken) {
     token = req.cookies.accessToken;
   }
 
-  // Fallback to Authorization header
   if (!token && req.headers.authorization) {
     const authHeader = req.headers.authorization;
     if (authHeader.startsWith("Bearer ")) {
@@ -179,7 +173,6 @@ const extractToken = (
   next();
 };
 
-// Main authentication middleware
 const authenticate = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -188,7 +181,6 @@ const authenticate = async (
   try {
     let token = null;
 
-    // Extract token from cookie or Authorization header
     if (req.cookies && req.cookies.accessToken) {
       token = req.cookies.accessToken;
     } else if (req.headers.authorization) {
@@ -213,7 +205,6 @@ const authenticate = async (
       });
     }
 
-    // Get fresh user data from database
     const user = await db.getUserById(parseInt(payload.userId));
     if (!user || !user.isVerified) {
       return res.status(401).json({
@@ -234,7 +225,6 @@ const authenticate = async (
   }
 };
 
-// Optional authentication middleware (doesn't fail if no token)
 const optionalAuthenticate = async (
   req: AuthenticatedRequest,
   _res: Response,
@@ -265,12 +255,10 @@ const optionalAuthenticate = async (
 
     next();
   } catch {
-    // Continue without authentication for optional auth
     next();
   }
 };
 
-// Role-based access control middleware
 const requireRole = (roles: ("user" | "admin")[]) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
@@ -291,13 +279,9 @@ const requireRole = (roles: ("user" | "admin")[]) => {
   };
 };
 
-// Admin-only middleware
 const requireAdmin = requireRole(["admin"]);
-
-// User or admin middleware
 const requireUser = requireRole(["user", "admin"]);
 
-// Rate limiting middleware helper
 const createRateLimiter = (windowMs: number, max: number) => {
   const requests = new Map<string, { count: number; resetTime: number }>();
 
@@ -305,7 +289,6 @@ const createRateLimiter = (windowMs: number, max: number) => {
     const ip = req.ip || req.connection.remoteAddress || "unknown";
     const now = Date.now();
 
-    // Clean up old entries
     for (const [key, value] of requests.entries()) {
       if (value.resetTime < now) {
         requests.delete(key);
@@ -330,7 +313,6 @@ const createRateLimiter = (windowMs: number, max: number) => {
   };
 };
 
-// Security headers middleware
 const securityHeaders = (_req: Request, res: Response, next: NextFunction) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");

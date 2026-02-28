@@ -1,7 +1,3 @@
-/**
- * Authentication API service for Google OAuth and traditional login
- */
-
 export interface User {
   id: string;
   email: string;
@@ -50,7 +46,6 @@ class AuthApiService {
   private readonly baseUrl =
     import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
-  // ── Token storage (in-memory + localStorage for persistence) ─────────────
   private memoryToken: string | null = null;
 
   getStoredToken(): string | null {
@@ -75,14 +70,12 @@ class AuthApiService {
     }
   }
 
-  // Grab token from a successful auth response and persist it
   private saveTokensFromResponse(data: AuthResponse): void {
     if (data.tokens?.accessToken) {
       this.setStoredToken(data.tokens.accessToken);
     }
   }
 
-  // ── HTTP helper ───────────────────────────────────────────────────────────
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -118,7 +111,6 @@ class AuthApiService {
     }
   }
 
-  // Google OAuth login
   async loginWithGoogle(credential: string): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>("/auth/google", {
       method: "POST",
@@ -133,7 +125,6 @@ class AuthApiService {
     return data;
   }
 
-  // Traditional email/password login
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>("/auth/login", {
       method: "POST",
@@ -145,7 +136,6 @@ class AuthApiService {
     return data;
   }
 
-  // Complete TOTP login challenge
   async totpLogin(challengeToken: string, code: string): Promise<AuthResponse> {
     const data = await this.request<AuthResponse>("/auth/totp/login", {
       method: "POST",
@@ -155,7 +145,6 @@ class AuthApiService {
     return data;
   }
 
-  // Generate TOTP secret + QR code
   async totpSetup(): Promise<{
     secret: string;
     qrCodeDataUrl: string;
@@ -164,7 +153,6 @@ class AuthApiService {
     return this.request("/auth/totp/setup", { method: "POST" });
   }
 
-  // Enable TOTP after verifying the code
   async totpEnable(code: string): Promise<{ message: string }> {
     return this.request("/auth/totp/enable", {
       method: "POST",
@@ -172,7 +160,6 @@ class AuthApiService {
     });
   }
 
-  // Disable TOTP (requires current code)
   async totpDisable(code: string): Promise<{ message: string }> {
     return this.request("/auth/totp/disable", {
       method: "POST",
@@ -180,7 +167,6 @@ class AuthApiService {
     });
   }
 
-  // Register new user
   async register(
     userData: RegisterData,
   ): Promise<{ message: string; user: User }> {
@@ -190,7 +176,6 @@ class AuthApiService {
     });
   }
 
-  // Logout
   async logout(): Promise<{ message: string }> {
     const result = await this.request<{ message: string }>("/auth/logout", {
       method: "POST",
@@ -199,7 +184,6 @@ class AuthApiService {
     return result;
   }
 
-  // Logout from all devices
   async logoutAll(): Promise<{ message: string }> {
     const result = await this.request<{ message: string }>("/auth/logout-all", {
       method: "POST",
@@ -208,7 +192,6 @@ class AuthApiService {
     return result;
   }
 
-  // Get current user profile
   async getCurrentUser(): Promise<{ user: User }> {
     const data = await this.request<{
       user: User;
@@ -222,7 +205,6 @@ class AuthApiService {
     return data;
   }
 
-  // Refresh access token
   async refreshToken(): Promise<{
     tokens: { accessToken: string; refreshToken: string };
   }> {
@@ -235,7 +217,6 @@ class AuthApiService {
     return data;
   }
 
-  // Update user profile
   async updateProfile(updates: {
     name: string;
   }): Promise<{ message: string; user: User }> {
@@ -245,7 +226,6 @@ class AuthApiService {
     });
   }
 
-  // Admin: Get all users
   async getUsers(
     page: number = 1,
     limit: number = 20,
@@ -256,7 +236,6 @@ class AuthApiService {
     return this.request(`/admin/users?page=${page}&limit=${limit}`);
   }
 
-  // Admin: Update user role
   async updateUserRole(
     userId: string,
     role: "user" | "admin",
@@ -270,7 +249,6 @@ class AuthApiService {
     });
   }
 
-  // Admin: Cancel a user's subscription
   async adminCancelUserSubscription(
     userId: string,
   ): Promise<{ message: string }> {
@@ -279,21 +257,18 @@ class AuthApiService {
     });
   }
 
-  // Admin: Remove a user's plan (local only, no Stripe)
   async adminRemoveUserPlan(userId: string): Promise<{ message: string }> {
     return this.request(`/admin/users/${userId}/plan`, {
       method: "DELETE",
     });
   }
 
-  // Admin: Permanently delete a user account
   async adminDeleteUser(userId: string): Promise<{ message: string }> {
     return this.request(`/admin/users/${userId}`, {
       method: "DELETE",
     });
   }
 
-  // Get businesses (optional auth)
   async getBusinesses(): Promise<{
     businesses: any[];
     user?: User;
