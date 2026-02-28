@@ -598,7 +598,7 @@ export function RidesharePanel({
       const { rideshare, passengers: pax } =
         await rideshareApi.getRideshare(id);
       setSelectedRide(rideshare);
-      setPassengers(pax);
+      setPassengers(Array.isArray(pax) ? pax : []);
     } catch {
       setError("Failed to load ride details");
     }
@@ -651,7 +651,7 @@ export function RidesharePanel({
         ride.id,
       );
       setSelectedRide(rideshare);
-      setPassengers(pax);
+      setPassengers(Array.isArray(pax) ? pax : []);
     } catch {
       setError("Failed to load details");
     } finally {
@@ -666,7 +666,7 @@ export function RidesharePanel({
       const { rideshare, passengers: pax } =
         await rideshareApi.getRideshareByCode(code);
       setSelectedRide(rideshare);
-      setPassengers(pax);
+      setPassengers(Array.isArray(pax) ? pax : []);
       setView("detail");
     } catch {
       setError("No ride found with that code");
@@ -1319,7 +1319,7 @@ function RideDetail({
         )}
 
         <div className="space-y-2">
-          {passengers.map((p) => (
+          {(Array.isArray(passengers) ? passengers : []).map((p) => (
             <div
               key={p.id}
               className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-700 rounded-lg"

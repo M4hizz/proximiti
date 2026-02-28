@@ -65,8 +65,9 @@ app.use(
         frameSrc: ["'self'", "https://accounts.google.com"],
       },
     },
-    // Allow Google OAuth popup to postMessage back to the opener window
-    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    // Google Sign-In (GSI) iframe uses postMessage from accounts.google.com.
+    // COOP must be unsafe-none (or disabled) to allow that cross-origin postMessage.
+    crossOriginOpenerPolicy: { policy: "unsafe-none" },
     hsts: {
       maxAge: 31536000,
       includeSubDomains: true,
