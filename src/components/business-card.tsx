@@ -8,6 +8,8 @@ interface BusinessCardProps {
   business: Business;
   isSelected: boolean;
   onClick: () => void;
+  /** Pre-fetched coupon count from the parent (avoids N+1 per-card requests). */
+  couponCount?: number;
 }
 
 /**
@@ -18,20 +20,23 @@ export function BusinessCard({
   business,
   isSelected,
   onClick,
+  couponCount: propCouponCount,
 }: BusinessCardProps) {
   const [bookmarked, setBookmarked] = useState(() => isBookmarked(business.id));
-  const [couponCount, setCouponCount] = useState<number>(0);
+  const [fetchedCount, setFetchedCount] = useState<number>(0);
+  const couponCount = propCouponCount ?? fetchedCount;
 
   useEffect(() => {
     setBookmarked(isBookmarked(business.id));
   }, [business.id]);
 
   useEffect(() => {
-    // Fetch coupon count for this business
+    // Only fetch individually when the parent hasn't provided the count
+    if (propCouponCount !== undefined) return;
     getBusinessCouponCount(business.id)
-      .then(setCouponCount)
-      .catch(() => setCouponCount(0));
-  }, [business.id]);
+      .then(setFetchedCount)
+      .catch(() => setFetchedCount(0));
+  }, [business.id, propCouponCount]);
   return (
     <button
       onClick={onClick}
@@ -56,12 +61,10 @@ export function BusinessCard({
               {business.name}
             </h3>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Bookmark 
+              <Bookmark
                 className={`w-5 h-5 ${
-                  bookmarked 
-                    ? "fill-cherry-rose text-cherry-rose" 
-                    : "opacity-0"
-                }`} 
+                  bookmarked ? "fill-cherry-rose text-cherry-rose" : "opacity-0"
+                }`}
               />
               {couponCount > 0 && (
                 <span className="px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold rounded-md flex items-center gap-1 whitespace-nowrap">

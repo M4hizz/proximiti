@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
-import { Search, ShoppingCart, MapPin, ChevronDown, Menu, User } from "lucide-react";
+import {
+  Search,
+  ShoppingCart,
+  MapPin,
+  ChevronDown,
+  Menu,
+  User,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -92,7 +99,7 @@ export function Header() {
               <Button variant="ghost" size="icon" className="rounded-full">
                 <User className="h-5 w-5" />
               </Button>
-              <span>{auth.user.username}</span>
+              <span>{auth.user.name}</span>
               <Button
                 variant="ghost"
                 size="sm"

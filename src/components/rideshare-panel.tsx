@@ -587,7 +587,7 @@ export function RidesharePanel({
   const fetchRideshares = useCallback(async () => {
     try {
       const { rideshares: data } = await rideshareApi.getActiveRideshares();
-      setRideshares(data);
+      setRideshares(Array.isArray(data) ? data : []);
     } catch {
       // Silently fail on poll – don't overwrite existing data
     }
@@ -598,7 +598,7 @@ export function RidesharePanel({
       const { rideshare, passengers: pax } =
         await rideshareApi.getRideshare(id);
       setSelectedRide(rideshare);
-      setPassengers(pax);
+      setPassengers(Array.isArray(pax) ? pax : []);
     } catch {
       setError("Failed to load ride details");
     }
@@ -651,7 +651,7 @@ export function RidesharePanel({
         ride.id,
       );
       setSelectedRide(rideshare);
-      setPassengers(pax);
+      setPassengers(Array.isArray(pax) ? pax : []);
     } catch {
       setError("Failed to load details");
     } finally {
@@ -666,7 +666,7 @@ export function RidesharePanel({
       const { rideshare, passengers: pax } =
         await rideshareApi.getRideshareByCode(code);
       setSelectedRide(rideshare);
-      setPassengers(pax);
+      setPassengers(Array.isArray(pax) ? pax : []);
       setView("detail");
     } catch {
       setError("No ride found with that code");
@@ -875,7 +875,7 @@ function RideList({
         {joinError && <p className="text-xs text-red-500 mt-1">{joinError}</p>}
       </div>
 
-      {rideshares.length === 0 ? (
+      {!Array.isArray(rideshares) || rideshares.length === 0 ? (
         <div className="text-center py-10 text-gray-400 dark:text-gray-500">
           <Car className="w-12 h-12 mx-auto mb-3 opacity-40" />
           <p className="font-medium">No active rides</p>
@@ -1319,7 +1319,7 @@ function RideDetail({
         )}
 
         <div className="space-y-2">
-          {passengers.map((p) => (
+          {(Array.isArray(passengers) ? passengers : []).map((p) => (
             <div
               key={p.id}
               className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-700 rounded-lg"

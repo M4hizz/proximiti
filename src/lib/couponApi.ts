@@ -3,7 +3,7 @@
  * Handles all coupon-related API calls
  */
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 export interface Coupon {
   id: string;
@@ -52,25 +52,48 @@ export interface UpdateCouponData {
 /**
  * Get active coupons for a business
  */
-export async function getBusinessCoupons(businessId: string): Promise<Coupon[]> {
+export async function getBusinessCoupons(
+  businessId: string,
+): Promise<Coupon[]> {
   const response = await fetch(`${API_URL}/businesses/${businessId}/coupons`);
   if (!response.ok) {
     throw new Error("Failed to fetch coupons");
   }
   const data = await response.json();
-  return data.coupons;
+  return data.coupons ?? [];
 }
 
 /**
  * Get active coupon count for a business (for badge display)
  */
-export async function getBusinessCouponCount(businessId: string): Promise<number> {
-  const response = await fetch(`${API_URL}/businesses/${businessId}/coupons/count`);
+export async function getBusinessCouponCount(
+  businessId: string,
+): Promise<number> {
+  const response = await fetch(
+    `${API_URL}/businesses/${businessId}/coupons/count`,
+  );
   if (!response.ok) {
     throw new Error("Failed to fetch coupon count");
   }
   const data = await response.json();
   return data.count;
+}
+
+/**
+ * Fetch coupon counts for multiple businesses in a single request.
+ * Returns a map of businessId → count (missing ids have 0 coupons).
+ */
+export async function getBatchCouponCounts(
+  businessIds: string[],
+): Promise<Record<string, number>> {
+  if (businessIds.length === 0) return {};
+  const ids = businessIds.slice(0, 50).join(",");
+  const response = await fetch(
+    `${API_URL}/businesses/coupons/batch-counts?ids=${encodeURIComponent(ids)}`,
+  );
+  if (!response.ok) return {};
+  const data = await response.json();
+  return data.counts ?? {};
 }
 
 /**
@@ -116,7 +139,7 @@ export async function getAllCoupons(businessId?: string): Promise<Coupon[]> {
   }
 
   const data = await response.json();
-  return data.coupons;
+  return data.coupons ?? [];
 }
 
 /**

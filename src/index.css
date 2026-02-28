@@ -148,6 +148,31 @@
   display: none;
 }
 
+/* ── Modern thin scrollbars ─────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4); /* gray-400/40 */
+  border-radius: 999px;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 193, 103, 0.6); /* primary green/60 */
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
 /* Slide down animation for business detail expansion */
 @keyframes slideDown {
   from {

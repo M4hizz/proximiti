@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import authApi from "@/lib/authApi";
+import { Captcha } from "@/components/ui/captcha";
 
 // Declare Google type for TypeScript
 declare global {
@@ -41,72 +42,80 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [googleInitialized, setGoogleInitialized] = useState(false);
+  const [googleScriptReady, setGoogleScriptReady] = useState(false);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const captchaResetRef = useRef(captchaReset);
 
   const auth = useAuth();
   const navigate = useNavigate();
 
-  // Initialize Google OAuth
+  // Step 1: Wait for Google script to load, then mark script as ready
   useEffect(() => {
-    const initializeGoogle = () => {
-      if (googleInitialized) return;
-
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-
-      if (!clientId || clientId === "your-google-client-id") {
-        console.warn(
-          "Google Client ID not configured. Email/password login is still available.",
-        );
-        setGoogleInitialized(true); // Set to true to stop showing "loading"
-        return;
-      }
-
-      if (!window.google) return;
-
-      try {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: handleGoogleResponse,
-          auto_select: false,
-        });
-
-        const googleButton = document.getElementById("google-signin-button");
-        if (googleButton) {
-          window.google.accounts.id.renderButton(googleButton, {
-            theme: "outline",
-            size: "large",
-            text: "signin_with",
-            width: "100%",
-          });
-        }
-
-        setGoogleInitialized(true);
-      } catch (error) {
-        console.error("Google OAuth initialization error:", error);
-        setGoogleInitialized(true); // Set to true to stop showing "loading"
-      }
-    };
-
-    // Wait for Google script to load
-    if (window.google) {
-      initializeGoogle();
-    } else {
-      const checkGoogle = setInterval(() => {
-        if (window.google) {
-          initializeGoogle();
-          clearInterval(checkGoogle);
-        }
-      }, 100);
-
-      // Clean up interval after 5 seconds and mark as initialized
-      setTimeout(() => {
-        clearInterval(checkGoogle);
-        if (!googleInitialized) {
-          console.warn("Google Identity Services failed to load");
-          setGoogleInitialized(true);
-        }
-      }, 5000);
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId || clientId === "your-google-client-id") {
+      setGoogleInitialized(true);
+      return;
     }
-  }, [googleInitialized]); // eslint-disable-line react-hooks/exhaustive-deps -- handleGoogleResponse is intentionally excluded to avoid re-initialising the Google SDK on every render
+
+    if (window.google) {
+      setGoogleScriptReady(true);
+      return;
+    }
+
+    const checkGoogle = setInterval(() => {
+      if (window.google) {
+        clearInterval(checkGoogle);
+        setGoogleScriptReady(true);
+      }
+    }, 100);
+
+    const timeout = setTimeout(() => {
+      clearInterval(checkGoogle);
+      console.warn("Google Identity Services failed to load");
+      setGoogleInitialized(true);
+    }, 5000);
+
+    return () => {
+      clearInterval(checkGoogle);
+      clearTimeout(timeout);
+    };
+  }, []);
+
+  // Step 2: Once script is ready, initialize and mark initialized (causes button div to mount)
+  useEffect(() => {
+    if (!googleScriptReady) return;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    try {
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleResponse,
+        auto_select: false,
+      });
+      setGoogleInitialized(true);
+    } catch (e) {
+      console.error("Google OAuth initialization error:", e);
+      setGoogleInitialized(true);
+    }
+  }, [googleScriptReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Step 3: Once the button div is in the DOM, render the Google button into it
+  useEffect(() => {
+    if (!googleInitialized || !googleScriptReady) return;
+    const googleButton = document.getElementById("google-signin-button");
+    if (googleButton) {
+      try {
+        window.google.accounts.id.renderButton(googleButton, {
+          theme: "outline",
+          size: "large",
+          text: "signin_with",
+          width: "368",
+        });
+      } catch (e) {
+        console.error("Google button render error:", e);
+      }
+    }
+  }, [googleInitialized, googleScriptReady]);
 
   const handleGoogleResponse = async (response: { credential: string }) => {
     setIsLoading(true);
@@ -126,6 +135,10 @@ export function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!captchaVerified) {
+      setError("Please complete the CAPTCHA.");
+      return;
+    }
     setIsLoading(true);
     setError("");
 
@@ -152,6 +165,10 @@ export function LoginForm() {
       console.error("Auth error:", error);
     } finally {
       setIsLoading(false);
+      // Reset CAPTCHA after every attempt
+      setCaptchaVerified(false);
+      captchaResetRef.current += 1;
+      setCaptchaReset(captchaResetRef.current);
     }
   };
 
@@ -284,10 +301,13 @@ export function LoginForm() {
           />
         </div>
 
+        {/* CAPTCHA */}
+        <Captcha onVerified={setCaptchaVerified} reset={captchaReset} />
+
         <Button
           type="submit"
           className="w-full bg-cherry-rose hover:bg-green-600 text-white disabled:opacity-50"
-          disabled={isLoading}
+          disabled={isLoading || !captchaVerified}
         >
           {isLoading ? (
             <div className="flex items-center gap-2">

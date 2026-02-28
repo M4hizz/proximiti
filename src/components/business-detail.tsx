@@ -51,7 +51,7 @@ export function BusinessDetail({
     setLiveGoogleTotal(totalRatings);
   };
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none flex flex-col max-h-[calc(100vh-8rem)]">
+    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-2xl flex flex-col">
       {/* Header image – uses the curated Unsplash category image (no API key required) */}
       <div className="relative h-48 bg-gray-200 dark:bg-gray-700">
         <img
@@ -74,7 +74,7 @@ export function BusinessDetail({
       </div>
 
       {/* Content */}
-      <div className="p-5 overflow-y-auto flex-1">
+      <div className="p-5">
         {/* Title and rating */}
         <div className="flex items-start justify-between gap-4">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -185,7 +185,7 @@ export function BusinessDetail({
           </Button>
           <Button
             variant="outline"
-            className={`flex-1 min-w-[140px] transition-colors ${
+            className={`flex-1 min-w-35 transition-colors ${
               isBookmarkedState
                 ? "border-cherry-rose text-cherry-rose dark:border-cherry-rose dark:text-cherry-rose hover:bg-cherry-rose hover:text-white"
                 : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"

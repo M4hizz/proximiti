@@ -122,8 +122,8 @@ function AuthProvider({ children }: AuthProviderProps) {
       const response = await authApi.getCurrentUser();
       setUser(response.user);
     } catch (error) {
+      // Don't clear the user on a failed refresh — session may still be valid
       console.error("Error refreshing user:", error);
-      setUser(null);
     }
   };
 

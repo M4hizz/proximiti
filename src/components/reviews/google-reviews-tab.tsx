@@ -33,10 +33,6 @@ interface GoogleReviewsTabProps {
   onGoogleData?: (rating: number, totalRatings: number) => void;
 }
 
-const INITIAL_COUNT = 5;
-const LOAD_MORE_COUNT = 5;
-const COOLDOWN_MS = 3000;
-
 /** Formats a Unix timestamp to a human-readable date string. */
 function formatTimestamp(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString("en-CA", {
@@ -57,14 +53,13 @@ export function GoogleReviewsTab({
   const [reviews, setReviews] = useState<GoogleReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [cooldown, setCooldown] = useState(false);
+  const cooldown = false;
   const [error, setError] = useState<string | null>(null);
   const [apiConfigured, setApiConfigured] = useState(true);
   const [liveRating, setLiveRating] = useState<number | null>(
     googleRating ?? null,
   );
   const [totalRatings, setTotalRatings] = useState<number | null>(null);
-  const [displayCount, setDisplayCount] = useState(INITIAL_COUNT);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [hasMorePages, setHasMorePages] = useState(false);
   // placeId is returned server-side and sent back on subsequent pagination requests
@@ -104,16 +99,13 @@ export function GoogleReviewsTab({
     setLoadingMore(true);
     setError(null);
     try {
-      const data = await fetchGoogleReviews(
-        businessName,
-        lat,
-        lng,
-        nextPageToken,
-      );
+      const data = await fetchGoogleReviews(businessName, lat, lng, {
+        pagetoken: nextPageToken,
+        placeId: placeId ?? undefined,
+      });
       setReviews((prev) => [...prev, ...data.reviews]);
       setNextPageToken(data.nextPageToken);
       setHasMorePages(data.nextPageToken !== null);
-      setDisplayCount((prev) => prev + LOAD_MORE_COUNT);
     } catch (err: any) {
       const errorMsg = err.message || "Could not load more reviews.";
       if (errorMsg.includes("429") || errorMsg.includes("rate")) {
@@ -134,9 +126,6 @@ export function GoogleReviewsTab({
   const handleShowMore = () => {
     loadMoreGoogleReviews();
   };
-
-  const displayedReviews = reviews.slice(0, displayCount);
-  const canShowMore = hasMorePages || displayCount < reviews.length;
 
   if (!apiConfigured) {
     return (

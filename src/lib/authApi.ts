@@ -8,6 +8,10 @@ export interface User {
   name: string;
   role: "user" | "admin";
   isVerified: boolean;
+  isPremium: boolean;
+  planType: "basic" | "essential" | "enterprise";
+  planExpiresAt: string | null;
+  stripeSubscriptionId?: string | null;
   createdAt?: string;
 }
 
@@ -156,6 +160,29 @@ class AuthApiService {
     return this.request(`/admin/users/${userId}/role`, {
       method: "PUT",
       body: JSON.stringify({ role }),
+    });
+  }
+
+  // Admin: Cancel a user's subscription
+  async adminCancelUserSubscription(
+    userId: string,
+  ): Promise<{ message: string }> {
+    return this.request(`/admin/users/${userId}/subscription`, {
+      method: "DELETE",
+    });
+  }
+
+  // Admin: Remove a user's plan (local only, no Stripe)
+  async adminRemoveUserPlan(userId: string): Promise<{ message: string }> {
+    return this.request(`/admin/users/${userId}/plan`, {
+      method: "DELETE",
+    });
+  }
+
+  // Admin: Permanently delete a user account
+  async adminDeleteUser(userId: string): Promise<{ message: string }> {
+    return this.request(`/admin/users/${userId}`, {
+      method: "DELETE",
     });
   }
 
