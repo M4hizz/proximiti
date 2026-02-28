@@ -3,7 +3,14 @@
  * Handles Stripe checkout and demo upgrade/downgrade
  */
 
+import authApi from "./authApi";
+
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+
+function authHeaders(): Record<string, string> {
+  const token = authApi.getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 /**
  * Create a Stripe Checkout session and redirect to Stripe payment page.
@@ -15,7 +22,7 @@ export async function startStripeCheckout(
   const response = await fetch(`${API_URL}/payments/create-checkout-session`, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ planId }),
   });
 
@@ -52,7 +59,7 @@ export async function demoUpgrade(
   const response = await fetch(`${API_URL}/payments/demo-upgrade`, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ planType }),
   });
 
@@ -83,6 +90,7 @@ export async function cancelSubscription(): Promise<{
   const response = await fetch(`${API_URL}/payments/subscription`, {
     method: "DELETE",
     credentials: "include",
+    headers: { ...authHeaders() },
   });
 
   const data = await response.json();
@@ -99,6 +107,7 @@ export async function demoDowngrade(): Promise<void> {
   const response = await fetch(`${API_URL}/payments/demo-downgrade`, {
     method: "DELETE",
     credentials: "include",
+    headers: { ...authHeaders() },
   });
 
   if (!response.ok) {

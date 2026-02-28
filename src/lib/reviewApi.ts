@@ -2,16 +2,23 @@
  * Frontend API service for the Proximiti review system and Google Places proxy.
  */
 
+import authApi from "./authApi";
+
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const token = authApi.getStoredToken();
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || data.message || "Request failed");

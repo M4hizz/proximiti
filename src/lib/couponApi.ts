@@ -3,7 +3,14 @@
  * Handles all coupon-related API calls
  */
 
+import authApi from "./authApi";
+
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+
+function authHeaders(): Record<string, string> {
+  const token = authApi.getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export interface Coupon {
   id: string;
@@ -105,8 +112,10 @@ export async function redeemCoupon(couponCode: string): Promise<{
 }> {
   const response = await fetch(`${API_URL}/coupons/redeem`, {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
     },
     body: JSON.stringify({ couponCode }),
   });
@@ -132,6 +141,7 @@ export async function getAllCoupons(businessId?: string): Promise<Coupon[]> {
 
   const response = await fetch(url, {
     credentials: "include",
+    headers: { ...authHeaders() },
   });
 
   if (!response.ok) {
@@ -153,6 +163,7 @@ export async function createCoupon(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
     },
     credentials: "include",
     body: JSON.stringify(couponData),
@@ -178,6 +189,7 @@ export async function updateCoupon(
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
     },
     credentials: "include",
     body: JSON.stringify(updates),
@@ -199,6 +211,7 @@ export async function deleteCoupon(couponId: string): Promise<void> {
   const response = await fetch(`${API_URL}/coupons/${couponId}`, {
     method: "DELETE",
     credentials: "include",
+    headers: { ...authHeaders() },
   });
 
   if (!response.ok) {

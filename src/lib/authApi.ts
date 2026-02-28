@@ -44,21 +44,57 @@ export interface RegisterData {
   name: string;
 }
 
+const TOKEN_KEY = "proximiti_access_token";
+
 class AuthApiService {
   private readonly baseUrl =
     import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
+  // ── Token storage (in-memory + localStorage for persistence) ─────────────
+  private memoryToken: string | null = null;
+
+  getStoredToken(): string | null {
+    if (this.memoryToken) return this.memoryToken;
+    try {
+      return localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  setStoredToken(token: string | null): void {
+    this.memoryToken = token;
+    try {
+      if (token) {
+        localStorage.setItem(TOKEN_KEY, token);
+      } else {
+        localStorage.removeItem(TOKEN_KEY);
+      }
+    } catch { /* localStorage unavailable */ }
+  }
+
+  // Grab token from a successful auth response and persist it
+  private saveTokensFromResponse(data: AuthResponse): void {
+    if (data.tokens?.accessToken) {
+      this.setStoredToken(data.tokens.accessToken);
+    }
+  }
+
+  // ── HTTP helper ───────────────────────────────────────────────────────────
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const token = this.getStoredToken();
 
     const config: RequestInit = {
       ...options,
-      credentials: "include", // Include cookies in requests
+      credentials: "include", // still send cookies when same-origin
       headers: {
         "Content-Type": "application/json",
+        // Inject stored token as Bearer — works cross-origin where cookies can't
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
     };
@@ -82,29 +118,39 @@ class AuthApiService {
 
   // Google OAuth login
   async loginWithGoogle(credential: string): Promise<LoginResponse> {
-    return this.request<LoginResponse>("/auth/google", {
+    const data = await this.request<LoginResponse>("/auth/google", {
       method: "POST",
       body: JSON.stringify({
         credential,
         clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
       }),
     });
+    if (!("totpRequired" in data) || !data.totpRequired) {
+      this.saveTokensFromResponse(data as AuthResponse);
+    }
+    return data;
   }
 
   // Traditional email/password login
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
-    return this.request<LoginResponse>("/auth/login", {
+    const data = await this.request<LoginResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify(credentials),
     });
+    if (!("totpRequired" in data) || !data.totpRequired) {
+      this.saveTokensFromResponse(data as AuthResponse);
+    }
+    return data;
   }
 
   // Complete TOTP login challenge
   async totpLogin(challengeToken: string, code: string): Promise<AuthResponse> {
-    return this.request<AuthResponse>("/auth/totp/login", {
+    const data = await this.request<AuthResponse>("/auth/totp/login", {
       method: "POST",
       body: JSON.stringify({ challengeToken, code }),
     });
+    this.saveTokensFromResponse(data);
+    return data;
   }
 
   // Generate TOTP secret + QR code
@@ -144,16 +190,20 @@ class AuthApiService {
 
   // Logout
   async logout(): Promise<{ message: string }> {
-    return this.request("/auth/logout", {
+    const result = await this.request<{ message: string }>("/auth/logout", {
       method: "POST",
     });
+    this.setStoredToken(null);
+    return result;
   }
 
   // Logout from all devices
   async logoutAll(): Promise<{ message: string }> {
-    return this.request("/auth/logout-all", {
+    const result = await this.request<{ message: string }>("/auth/logout-all", {
       method: "POST",
     });
+    this.setStoredToken(null);
+    return result;
   }
 
   // Get current user profile
@@ -165,9 +215,13 @@ class AuthApiService {
   async refreshToken(): Promise<{
     tokens: { accessToken: string; refreshToken: string };
   }> {
-    return this.request("/auth/refresh", {
-      method: "POST",
-    });
+    const data = await this.request<{
+      tokens: { accessToken: string; refreshToken: string };
+    }>("/auth/refresh", { method: "POST" });
+    if (data.tokens?.accessToken) {
+      this.setStoredToken(data.tokens.accessToken);
+    }
+    return data;
   }
 
   // Update user profile

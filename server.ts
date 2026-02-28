@@ -97,7 +97,12 @@ const corsOptions: CorsOptions = {
       ? /^https:\/\/[\w-]+\.vercel\.app$/.test(origin)
       : false;
 
-    if (!origin || allowedOrigins.includes(origin) || isVercelOrigin) {
+    // Allow any Render.com deployment
+    const isRenderOrigin = origin
+      ? /^https:\/\/[\w-]+\.onrender\.com$/.test(origin)
+      : false;
+
+    if (!origin || allowedOrigins.includes(origin) || isVercelOrigin || isRenderOrigin) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));

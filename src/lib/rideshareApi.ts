@@ -2,6 +2,8 @@
  * Rideshare API service – handles all rideshare lobby operations.
  */
 
+import authApi from "./authApi";
+
 export type RideshareStatus =
   | "waiting"
   | "accepted"
@@ -48,11 +50,13 @@ class RideshareApiService {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
+    const token = authApi.getStoredToken();
     const config: RequestInit = {
       ...options,
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
     };
