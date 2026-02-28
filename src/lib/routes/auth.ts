@@ -490,7 +490,11 @@ router.post(
       // Generate a fresh TOTP secret
       const secret = generateSecret();
       const appName = process.env.APP_NAME || "Proximiti";
-      const otpAuthUrl = generateURI({ issuer: appName, label: req.user.email, secret });
+      const otpAuthUrl = generateURI({
+        issuer: appName,
+        label: req.user.email,
+        secret,
+      });
 
       // Generate QR code as a data URL (PNG base64)
       const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl, { width: 256 });
@@ -649,7 +653,10 @@ router.post(
           .json({ error: "User not found or 2FA not configured" });
       }
 
-      const isValid = verifySync({ secret: user.totpSecret, token: code }).valid;
+      const isValid = verifySync({
+        secret: user.totpSecret,
+        token: code,
+      }).valid;
       if (!isValid) {
         return res.status(400).json({
           error: "Invalid code",
