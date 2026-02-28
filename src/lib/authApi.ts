@@ -70,7 +70,9 @@ class AuthApiService {
       } else {
         localStorage.removeItem(TOKEN_KEY);
       }
-    } catch { /* localStorage unavailable */ }
+    } catch {
+      /* localStorage unavailable */
+    }
   }
 
   // Grab token from a successful auth response and persist it

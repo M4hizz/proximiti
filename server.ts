@@ -102,7 +102,12 @@ const corsOptions: CorsOptions = {
       ? /^https:\/\/[\w-]+\.onrender\.com$/.test(origin)
       : false;
 
-    if (!origin || allowedOrigins.includes(origin) || isVercelOrigin || isRenderOrigin) {
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      isVercelOrigin ||
+      isRenderOrigin
+    ) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -2055,16 +2060,19 @@ app.get(
 );
 
 // Get active coupon count for a business (for badges)
-app.get("/api/businesses/:id/coupons/count", async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params as { id: string };
-    const count = await db.getActiveCouponCount(id);
-    res.json({ count });
-  } catch (error) {
-    console.error("Error fetching coupon count:", error);
-    res.status(500).json({ error: "Failed to fetch coupon count" });
-  }
-});
+app.get(
+  "/api/businesses/:id/coupons/count",
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+      const count = await db.getActiveCouponCount(id);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching coupon count:", error);
+      res.status(500).json({ error: "Failed to fetch coupon count" });
+    }
+  },
+);
 
 // Redeem a coupon (public)
 app.post("/api/coupons/redeem", async (req: Request, res: Response) => {
