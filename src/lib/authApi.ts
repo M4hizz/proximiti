@@ -107,7 +107,11 @@ class AuthApiService {
   }
 
   // Generate TOTP secret + QR code
-  async totpSetup(): Promise<{ secret: string; qrCodeDataUrl: string; otpAuthUrl: string }> {
+  async totpSetup(): Promise<{
+    secret: string;
+    qrCodeDataUrl: string;
+    otpAuthUrl: string;
+  }> {
     return this.request("/auth/totp/setup", { method: "POST" });
   }
 

@@ -8,7 +8,10 @@ interface AccountSettingsModalProps {
   onClose: () => void;
 }
 
-export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalProps) {
+export function AccountSettingsModal({
+  isOpen,
+  onClose,
+}: AccountSettingsModalProps) {
   const { user, refreshUser } = useAuth();
   const [totpEnabled, setTotpEnabled] = useState(user?.totpEnabled ?? false);
 
@@ -38,7 +41,9 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-blue-500" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Account Settings</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Account Settings
+            </h2>
           </div>
           <button
             onClick={onClose}
@@ -57,13 +62,20 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
               {user.name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">{user.name}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+              <p className="font-medium text-gray-900 dark:text-white">
+                {user.name}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {user.email}
+              </p>
             </div>
           </div>
 
           {/* 2FA Section */}
-          <TwoFactorSetup totpEnabled={totpEnabled} onStatusChange={handleTotpStatusChange} />
+          <TwoFactorSetup
+            totpEnabled={totpEnabled}
+            onStatusChange={handleTotpStatusChange}
+          />
         </div>
       </div>
     </div>

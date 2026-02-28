@@ -10,7 +10,11 @@ interface TwoFactorChallengeProps {
   onCancel: () => void;
 }
 
-export function TwoFactorChallenge({ challengeToken, onSuccess, onCancel }: TwoFactorChallengeProps) {
+export function TwoFactorChallenge({
+  challengeToken,
+  onSuccess,
+  onCancel,
+}: TwoFactorChallengeProps) {
   const [codes, setCodes] = useState<string[]>(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,7 +34,10 @@ export function TwoFactorChallenge({ challengeToken, onSuccess, onCancel }: TwoF
     }
   };
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (e.key === "Backspace" && !codes[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -38,7 +45,10 @@ export function TwoFactorChallenge({ challengeToken, onSuccess, onCancel }: TwoF
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const pasted = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
     const newCodes = [...codes];
     for (let i = 0; i < 6; i++) {
       newCodes[i] = pasted[i] || "";
@@ -75,9 +85,12 @@ export function TwoFactorChallenge({ challengeToken, onSuccess, onCancel }: TwoF
         <div className="rounded-full bg-blue-100 dark:bg-blue-900/40 p-3">
           <ShieldCheck className="h-7 w-7 text-blue-600 dark:text-blue-400" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Two-Factor Authentication</h2>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+          Two-Factor Authentication
+        </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-          Open <strong>Google Authenticator</strong> and enter the 6-digit code for your account.
+          Open <strong>Google Authenticator</strong> and enter the 6-digit code
+          for your account.
         </p>
       </div>
 
@@ -93,7 +106,9 @@ export function TwoFactorChallenge({ challengeToken, onSuccess, onCancel }: TwoF
           {codes.map((digit, i) => (
             <Input
               key={i}
-              ref={(el) => { inputRefs.current[i] = el; }}
+              ref={(el) => {
+                inputRefs.current[i] = el;
+              }}
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
@@ -108,7 +123,11 @@ export function TwoFactorChallenge({ challengeToken, onSuccess, onCancel }: TwoF
           ))}
         </div>
 
-        <Button type="submit" className="w-full" disabled={loading || codes.join("").length !== 6}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={loading || codes.join("").length !== 6}
+        >
           {loading ? "Verifying…" : "Verify"}
         </Button>
 

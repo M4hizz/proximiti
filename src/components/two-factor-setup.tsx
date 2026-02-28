@@ -10,7 +10,10 @@ interface TwoFactorSetupProps {
   onStatusChange?: (enabled: boolean) => void;
 }
 
-export function TwoFactorSetup({ totpEnabled, onStatusChange }: TwoFactorSetupProps) {
+export function TwoFactorSetup({
+  totpEnabled,
+  onStatusChange,
+}: TwoFactorSetupProps) {
   const [phase, setPhase] = useState<"idle" | "setup" | "disabling">("idle");
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [secret, setSecret] = useState("");
@@ -167,8 +170,8 @@ export function TwoFactorSetup({ totpEnabled, onStatusChange }: TwoFactorSetupPr
       {phase === "setup" && (
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-300">
-            <strong>Step 1:</strong> Open <strong>Google Authenticator</strong> on your phone and
-            tap <strong>+</strong> → <em>Scan a QR code</em>.
+            <strong>Step 1:</strong> Open <strong>Google Authenticator</strong>{" "}
+            on your phone and tap <strong>+</strong> → <em>Scan a QR code</em>.
           </p>
 
           {qrCodeDataUrl && (
@@ -206,7 +209,8 @@ export function TwoFactorSetup({ totpEnabled, onStatusChange }: TwoFactorSetupPr
 
           <div className="space-y-2">
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              <strong>Step 2:</strong> Enter the 6-digit code shown in the app to confirm setup:
+              <strong>Step 2:</strong> Enter the 6-digit code shown in the app
+              to confirm setup:
             </p>
             <Label htmlFor="totp-code-enable">6-digit code</Label>
             <Input
@@ -217,13 +221,19 @@ export function TwoFactorSetup({ totpEnabled, onStatusChange }: TwoFactorSetupPr
               maxLength={6}
               placeholder="000000"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onChange={(e) =>
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+              }
               className="text-center text-lg tracking-[0.4em] font-mono"
             />
           </div>
 
           <div className="flex gap-3">
-            <Button onClick={handleEnable} disabled={loading || code.length !== 6} className="flex-1">
+            <Button
+              onClick={handleEnable}
+              disabled={loading || code.length !== 6}
+              className="flex-1"
+            >
               {loading ? "Verifying…" : "Confirm & Enable 2FA"}
             </Button>
             <Button variant="outline" onClick={handleCancel} disabled={loading}>
@@ -237,8 +247,8 @@ export function TwoFactorSetup({ totpEnabled, onStatusChange }: TwoFactorSetupPr
       {phase === "disabling" && (
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-300">
-            Enter the current 6-digit code from <strong>Google Authenticator</strong> to disable
-            2FA:
+            Enter the current 6-digit code from{" "}
+            <strong>Google Authenticator</strong> to disable 2FA:
           </p>
           <div className="space-y-2">
             <Label htmlFor="totp-code-disable">6-digit code</Label>
@@ -250,7 +260,9 @@ export function TwoFactorSetup({ totpEnabled, onStatusChange }: TwoFactorSetupPr
               maxLength={6}
               placeholder="000000"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onChange={(e) =>
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+              }
               className="text-center text-lg tracking-[0.4em] font-mono"
             />
           </div>

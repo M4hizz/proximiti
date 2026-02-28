@@ -46,7 +46,9 @@ export function LoginForm() {
   const [googleScriptReady, setGoogleScriptReady] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [captchaReset, setCaptchaReset] = useState(0);
-  const [totpChallengeToken, setTotpChallengeToken] = useState<string | null>(null);
+  const [totpChallengeToken, setTotpChallengeToken] = useState<string | null>(
+    null,
+  );
   const captchaResetRef = useRef(captchaReset);
 
   const auth = useAuth();
@@ -207,169 +209,179 @@ export function LoginForm() {
         />
       )}
       {!totpChallengeToken && (
-      <><div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {isLogin ? "Welcome back" : "Create account"}
-        </h2>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">
-          {isLogin
-            ? "Sign in to access your personalized business finder"
-            : "Join Proximiti to discover local businesses"}
-        </p>
-      </div>
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-600/20 border border-red-600/50 rounded-lg text-red-400 text-sm">
-          {error}
-        </div>
-      )}
-
-      {/* Google Sign-in Button */}
-      <div className="mb-4">
-        {!googleInitialized ? (
-          <div className="w-full h-10 bg-gray-200 dark:bg-gray-700 rounded animate-pulse flex items-center justify-center">
-            <span className="text-gray-500 dark:text-gray-400 text-sm">
-              Loading Google Sign-In...
-            </span>
+        <>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {isLogin ? "Welcome back" : "Create account"}
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">
+              {isLogin
+                ? "Sign in to access your personalized business finder"
+                : "Join Proximiti to discover local businesses"}
+            </p>
           </div>
-        ) : (
-          <>
-            {import.meta.env.VITE_GOOGLE_CLIENT_ID &&
-            import.meta.env.VITE_GOOGLE_CLIENT_ID !==
-              "your-google-client-id" ? (
-              <div
-                id="google-signin-button"
-                className="w-full flex justify-center"
-              />
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-600/20 border border-red-600/50 rounded-lg text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* Google Sign-in Button */}
+          <div className="mb-4">
+            {!googleInitialized ? (
+              <div className="w-full h-10 bg-gray-200 dark:bg-gray-700 rounded animate-pulse flex items-center justify-center">
+                <span className="text-gray-500 dark:text-gray-400 text-sm">
+                  Loading Google Sign-In...
+                </span>
+              </div>
             ) : (
-              <div className="w-full p-3 bg-blue-600/20 border border-blue-600/50 rounded-lg text-center">
-                <p className="text-blue-400 text-sm">
-                  🔧 Google OAuth not configured
-                </p>
-                <p className="text-blue-300 text-xs mt-1">
-                  Use email/password below or set up Google OAuth in .env
-                </p>
+              <>
+                {import.meta.env.VITE_GOOGLE_CLIENT_ID &&
+                import.meta.env.VITE_GOOGLE_CLIENT_ID !==
+                  "your-google-client-id" ? (
+                  <div
+                    id="google-signin-button"
+                    className="w-full flex justify-center"
+                  />
+                ) : (
+                  <div className="w-full p-3 bg-blue-600/20 border border-blue-600/50 rounded-lg text-center">
+                    <p className="text-blue-400 text-sm">
+                      🔧 Google OAuth not configured
+                    </p>
+                    <p className="text-blue-300 text-xs mt-1">
+                      Use email/password below or set up Google OAuth in .env
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Divider - only show if Google OAuth is available */}
+          {googleInitialized &&
+            import.meta.env.VITE_GOOGLE_CLIENT_ID &&
+            import.meta.env.VITE_GOOGLE_CLIENT_ID !==
+              "your-google-client-id" && (
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                    Or continue with email
+                  </span>
+                </div>
               </div>
             )}
-          </>
-        )}
-      </div>
 
-      {/* Divider - only show if Google OAuth is available */}
-      {googleInitialized &&
-        import.meta.env.VITE_GOOGLE_CLIENT_ID &&
-        import.meta.env.VITE_GOOGLE_CLIENT_ID !== "your-google-client-id" && (
-          <div className="relative mb-4">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label
+                  htmlFor="name"
+                  className="text-gray-700 dark:text-gray-300"
+                >
+                  Full Name
+                </Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required={!isLogin}
+                  className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="email"
+                className="text-gray-700 dark:text-gray-300"
+              >
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
+              />
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                Or continue with email
-              </span>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="password"
+                className="text-gray-700 dark:text-gray-300"
+              >
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder={
+                  isLogin
+                    ? "Enter your password"
+                    : "Choose a secure password (8+ chars)"
+                }
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
+              />
             </div>
+
+            {/* CAPTCHA */}
+            <Captcha onVerified={setCaptchaVerified} reset={captchaReset} />
+
+            <Button
+              type="submit"
+              className="w-full bg-cherry-rose hover:bg-green-600 text-white disabled:opacity-50"
+              disabled={isLoading || !captchaVerified}
+            >
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  {isLogin ? "Signing In..." : "Creating Account..."}
+                </div>
+              ) : isLogin ? (
+                "Sign In"
+              ) : (
+                "Create Account"
+              )}
+            </Button>
+          </form>
+
+          <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+            <button
+              type="button"
+              className="text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 font-medium"
+              onClick={toggleMode}
+              disabled={isLoading}
+            >
+              {isLogin ? "Sign up" : "Sign in"}
+            </button>
           </div>
-        )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {!isLogin && (
-          <div className="space-y-2">
-            <Label htmlFor="name" className="text-gray-700 dark:text-gray-300">
-              Full Name
-            </Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="Enter your full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required={!isLogin}
-              className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
-            />
+          {/* Security Notice */}
+          <div className="mt-4 text-xs text-gray-400 dark:text-gray-500 text-center">
+            <p>🔒 Your data is protected with enterprise-grade security</p>
+            {!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+            import.meta.env.VITE_GOOGLE_CLIENT_ID ===
+              "your-google-client-id" ? (
+              <p className="mt-1 text-blue-400">
+                💡 To enable Google Sign-In, see SECURITY_SETUP.md
+              </p>
+            ) : null}
           </div>
-        )}
-
-        <div className="space-y-2">
-          <Label htmlFor="email" className="text-gray-700 dark:text-gray-300">
-            Email
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="Enter your email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label
-            htmlFor="password"
-            className="text-gray-700 dark:text-gray-300"
-          >
-            Password
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder={
-              isLogin
-                ? "Enter your password"
-                : "Choose a secure password (8+ chars)"
-            }
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-green-500 focus:border-green-500"
-          />
-        </div>
-
-        {/* CAPTCHA */}
-        <Captcha onVerified={setCaptchaVerified} reset={captchaReset} />
-
-        <Button
-          type="submit"
-          className="w-full bg-cherry-rose hover:bg-green-600 text-white disabled:opacity-50"
-          disabled={isLoading || !captchaVerified}
-        >
-          {isLoading ? (
-            <div className="flex items-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              {isLogin ? "Signing In..." : "Creating Account..."}
-            </div>
-          ) : isLogin ? (
-            "Sign In"
-          ) : (
-            "Create Account"
-          )}
-        </Button>
-      </form>
-
-      <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-        {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-        <button
-          type="button"
-          className="text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 font-medium"
-          onClick={toggleMode}
-          disabled={isLoading}
-        >
-          {isLogin ? "Sign up" : "Sign in"}
-        </button>
-      </div>
-
-      {/* Security Notice */}
-      <div className="mt-4 text-xs text-gray-400 dark:text-gray-500 text-center">
-        <p>🔒 Your data is protected with enterprise-grade security</p>
-        {!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-        import.meta.env.VITE_GOOGLE_CLIENT_ID === "your-google-client-id" ? (
-          <p className="mt-1 text-blue-400">
-            💡 To enable Google Sign-In, see SECURITY_SETUP.md
-          </p>
-        ) : null}
-      </div>
-      </>)}
+        </>
+      )}
     </div>
   );
 }

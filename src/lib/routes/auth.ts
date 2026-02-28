@@ -206,7 +206,11 @@ router.post(
         const challengeToken = jwt.sign(
           { userId: user.id, challenge: true },
           process.env.JWT_SECRET!,
-          { expiresIn: "5m", issuer: "proximiti-app", audience: "proximiti-users" },
+          {
+            expiresIn: "5m",
+            issuer: "proximiti-app",
+            audience: "proximiti-users",
+          },
         );
         return res.status(200).json({
           totpRequired: true,
@@ -478,7 +482,8 @@ router.post(
       if (req.user.totpEnabled) {
         return res.status(400).json({
           error: "2FA already enabled",
-          message: "Two-factor authentication is already active. Disable it first.",
+          message:
+            "Two-factor authentication is already active. Disable it first.",
         });
       }
 
@@ -491,7 +496,10 @@ router.post(
       const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl, { width: 256 });
 
       // Store the secret temporarily (not yet enabled) so we can verify the next step
-      await db.updateUser(req.user.id, { totpSecret: secret, totpEnabled: false });
+      await db.updateUser(req.user.id, {
+        totpSecret: secret,
+        totpEnabled: false,
+      });
 
       res.status(200).json({
         secret,
@@ -532,13 +540,16 @@ router.post(
       if (!isValid) {
         return res.status(400).json({
           error: "Invalid code",
-          message: "The 6-digit code is incorrect. Make sure your device clock is accurate.",
+          message:
+            "The 6-digit code is incorrect. Make sure your device clock is accurate.",
         });
       }
 
       await db.updateUser(req.user.id, { totpEnabled: true });
 
-      res.status(200).json({ message: "Two-factor authentication enabled successfully." });
+      res
+        .status(200)
+        .json({ message: "Two-factor authentication enabled successfully." });
     } catch (error) {
       console.error("TOTP enable error:", error);
       res.status(500).json({ error: "Failed to enable TOTP" });
@@ -562,12 +573,16 @@ router.post(
 
       const { code } = req.body as { code: string };
       if (!code) {
-        return res.status(400).json({ error: "TOTP code is required to disable 2FA" });
+        return res
+          .status(400)
+          .json({ error: "TOTP code is required to disable 2FA" });
       }
 
       const secret = req.user.totpSecret;
       if (!secret) {
-        return res.status(500).json({ error: "Internal error: TOTP secret missing" });
+        return res
+          .status(500)
+          .json({ error: "Internal error: TOTP secret missing" });
       }
 
       const isValid = authenticator.verify({ token: code, secret });
@@ -578,7 +593,10 @@ router.post(
         });
       }
 
-      await db.updateUser(req.user.id, { totpEnabled: false, totpSecret: null });
+      await db.updateUser(req.user.id, {
+        totpEnabled: false,
+        totpSecret: null,
+      });
 
       res.status(200).json({ message: "Two-factor authentication disabled." });
     } catch (error) {
@@ -626,10 +644,15 @@ router.post(
 
       const user = await db.getUserById(parseInt(payload.userId));
       if (!user || !user.totpEnabled || !user.totpSecret) {
-        return res.status(401).json({ error: "User not found or 2FA not configured" });
+        return res
+          .status(401)
+          .json({ error: "User not found or 2FA not configured" });
       }
 
-      const isValid = authenticator.verify({ token: code, secret: user.totpSecret });
+      const isValid = authenticator.verify({
+        token: code,
+        secret: user.totpSecret,
+      });
       if (!isValid) {
         return res.status(400).json({
           error: "Invalid code",
@@ -638,7 +661,8 @@ router.post(
       }
 
       // Issue full tokens
-      const { accessToken, refreshToken } = await AuthService.generateTokens(user);
+      const { accessToken, refreshToken } =
+        await AuthService.generateTokens(user);
 
       const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000);
       const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);

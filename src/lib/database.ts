@@ -216,11 +216,19 @@ class DatabaseManager {
 
     // Migrate: add TOTP columns if they don't exist yet (for existing databases)
     try {
-      await this.client.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL");
-    } catch { /* already exists */ }
+      await this.client.execute(
+        "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
+      );
+    } catch {
+      /* already exists */
+    }
     try {
-      await this.client.execute("ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT 0");
-    } catch { /* already exists */ }
+      await this.client.execute(
+        "ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT 0",
+      );
+    } catch {
+      /* already exists */
+    }
 
     await this.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
