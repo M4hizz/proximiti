@@ -2017,10 +2017,10 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
 // ─── Coupons API ─────────────────────────────────────────────────────────────
 
 // Get active coupons for a business (public)
-app.get("/api/businesses/:id/coupons", (req: Request, res: Response) => {
+app.get("/api/businesses/:id/coupons", async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
-    const coupons = db.getActiveCouponsForBusiness(id);
+    const coupons = await db.getActiveCouponsForBusiness(id);
     res.json({ coupons });
   } catch (error) {
     console.error("Error fetching coupons:", error);
@@ -2050,10 +2050,10 @@ app.get(
 );
 
 // Get active coupon count for a business (for badges)
-app.get("/api/businesses/:id/coupons/count", (req: Request, res: Response) => {
+app.get("/api/businesses/:id/coupons/count", async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
-    const count = db.getActiveCouponCount(id);
+    const count = await db.getActiveCouponCount(id);
     res.json({ count });
   } catch (error) {
     console.error("Error fetching coupon count:", error);
