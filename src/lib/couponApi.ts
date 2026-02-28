@@ -60,7 +60,7 @@ export async function getBusinessCoupons(
     throw new Error("Failed to fetch coupons");
   }
   const data = await response.json();
-  return data.coupons;
+  return data.coupons ?? [];
 }
 
 /**
@@ -122,7 +122,7 @@ export async function getAllCoupons(businessId?: string): Promise<Coupon[]> {
   }
 
   const data = await response.json();
-  return data.coupons;
+  return data.coupons ?? [];
 }
 
 /**
