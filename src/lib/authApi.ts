@@ -17,6 +17,7 @@ export interface User {
 }
 
 export interface AuthResponse {
+  totpRequired?: false; // discriminant — makes TypeScript narrow the union correctly
   message: string;
   user: User;
   tokens?: {

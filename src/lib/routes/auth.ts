@@ -8,7 +8,7 @@ import {
   createRateLimiter,
   authenticate,
 } from "../auth";
-import { authenticator } from "otplib";
+import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
 
 const router = Router();
@@ -488,9 +488,9 @@ router.post(
       }
 
       // Generate a fresh TOTP secret
-      const secret = authenticator.generateSecret();
+      const secret = generateSecret();
       const appName = process.env.APP_NAME || "Proximiti";
-      const otpAuthUrl = authenticator.keyuri(req.user.email, appName, secret);
+      const otpAuthUrl = generateURI({ issuer: appName, label: req.user.email, secret });
 
       // Generate QR code as a data URL (PNG base64)
       const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl, { width: 256 });
@@ -536,7 +536,7 @@ router.post(
         });
       }
 
-      const isValid = authenticator.verify({ token: code, secret });
+      const isValid = verifySync({ secret, token: code }).valid;
       if (!isValid) {
         return res.status(400).json({
           error: "Invalid code",
@@ -585,7 +585,7 @@ router.post(
           .json({ error: "Internal error: TOTP secret missing" });
       }
 
-      const isValid = authenticator.verify({ token: code, secret });
+      const isValid = verifySync({ secret, token: code }).valid;
       if (!isValid) {
         return res.status(400).json({
           error: "Invalid code",
@@ -649,10 +649,7 @@ router.post(
           .json({ error: "User not found or 2FA not configured" });
       }
 
-      const isValid = authenticator.verify({
-        token: code,
-        secret: user.totpSecret,
-      });
+      const isValid = verifySync({ secret: user.totpSecret, token: code }).valid;
       if (!isValid) {
         return res.status(400).json({
           error: "Invalid code",
