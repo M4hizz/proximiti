@@ -7,6 +7,7 @@ import {
   type AuthenticatedRequest,
   createRateLimiter,
   authenticate,
+  optionalAuthenticate,
 } from "../auth";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
@@ -380,6 +381,7 @@ router.post(
 // Logout
 router.post(
   "/auth/logout",
+  optionalAuthenticate,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       // Revoke current session if user is authenticated
@@ -418,6 +420,7 @@ router.post(
 // Logout from all devices
 router.post(
   "/auth/logout-all",
+  optionalAuthenticate,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       if (!req.user) {
@@ -459,29 +462,45 @@ router.post(
 );
 
 // Get current user profile
-router.get("/auth/me", async (req: AuthenticatedRequest, res: Response) => {
-  if (!req.user) {
-    return res.status(401).json({
-      error: "Authentication required",
-      message: "You must be logged in to view your profile",
-    });
-  }
+router.get(
+  "/auth/me",
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "You must be logged in to view your profile",
+      });
+    }
 
-  res.status(200).json({
-    user: {
-      id: req.user.id,
-      email: req.user.email,
-      name: req.user.name,
-      role: req.user.role,
-      isVerified: req.user.isVerified,
-      isPremium: req.user.isPremium,
-      planType: req.user.planType,
-      planExpiresAt: req.user.planExpiresAt,
-      totpEnabled: req.user.totpEnabled,
-      createdAt: req.user.createdAt,
-    },
-  });
-});
+    // Issue a fresh access token alongside the user object so the frontend
+    // can store it in localStorage for cross-origin (non-cookie) requests.
+    const { accessToken, refreshToken } = await AuthService.generateTokens(
+      req.user,
+    );
+
+    const accessCookieOptions = getCookieOptions(7 * 24 * 60 * 60 * 1000);
+    const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
+    res.cookie("accessToken", accessToken, accessCookieOptions);
+    res.cookie("refreshToken", refreshToken, refreshCookieOptions);
+
+    res.status(200).json({
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        name: req.user.name,
+        role: req.user.role,
+        isVerified: req.user.isVerified,
+        isPremium: req.user.isPremium,
+        planType: req.user.planType,
+        planExpiresAt: req.user.planExpiresAt,
+        totpEnabled: req.user.totpEnabled,
+        createdAt: req.user.createdAt,
+      },
+      tokens: { accessToken, refreshToken },
+    });
+  },
+);
 
 // ─── TOTP / Google Authenticator Routes ──────────────────────────────────────
 

@@ -210,7 +210,16 @@ class AuthApiService {
 
   // Get current user profile
   async getCurrentUser(): Promise<{ user: User }> {
-    return this.request("/auth/me");
+    const data = await this.request<{
+      user: User;
+      tokens?: { accessToken: string; refreshToken: string };
+    }>("/auth/me");
+    // /auth/me now returns a fresh token — persist it so cross-origin
+    // requests keep working across page refreshes without requiring re-login.
+    if (data.tokens?.accessToken) {
+      this.setStoredToken(data.tokens.accessToken);
+    }
+    return data;
   }
 
   // Refresh access token
