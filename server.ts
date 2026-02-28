@@ -92,7 +92,9 @@ const corsOptions: CorsOptions = {
     ].filter(Boolean) as string[];
 
     // Allow any Vercel preview/production deployment
-    const isVercelOrigin = origin ? /^https:\/\/[\w-]+\.vercel\.app$/.test(origin) : false;
+    const isVercelOrigin = origin
+      ? /^https:\/\/[\w-]+\.vercel\.app$/.test(origin)
+      : false;
 
     if (!origin || allowedOrigins.includes(origin) || isVercelOrigin) {
       callback(null, true);
@@ -2026,22 +2028,25 @@ app.get("/api/businesses/:id/coupons", (req: Request, res: Response) => {
 });
 
 // Batch coupon counts for multiple businesses in one request (avoids N+1 calls from the UI)
-app.get("/api/businesses/coupons/batch-counts", async (req: Request, res: Response) => {
-  try {
-    const raw = req.query.ids as string | undefined;
-    if (!raw) return res.json({ counts: {} });
-    const ids = raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 50); // cap at 50 to prevent abuse
-    const counts = await db.getActiveCouponCounts(ids);
-    res.json({ counts });
-  } catch (error) {
-    console.error("Error fetching batch coupon counts:", error);
-    res.status(500).json({ error: "Failed to fetch coupon counts" });
-  }
-});
+app.get(
+  "/api/businesses/coupons/batch-counts",
+  async (req: Request, res: Response) => {
+    try {
+      const raw = req.query.ids as string | undefined;
+      if (!raw) return res.json({ counts: {} });
+      const ids = raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 50); // cap at 50 to prevent abuse
+      const counts = await db.getActiveCouponCounts(ids);
+      res.json({ counts });
+    } catch (error) {
+      console.error("Error fetching batch coupon counts:", error);
+      res.status(500).json({ error: "Failed to fetch coupon counts" });
+    }
+  },
+);
 
 // Get active coupon count for a business (for badges)
 app.get("/api/businesses/:id/coupons/count", (req: Request, res: Response) => {
