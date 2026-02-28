@@ -93,7 +93,9 @@ export function BusinessFinder() {
             setTimeout(() => setPremiumNotification(null), 6000);
             return;
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
 
         if (attempts < MAX_ATTEMPTS) {
           setTimeout(poll, INTERVAL_MS);
