@@ -65,6 +65,8 @@ app.use(
         frameSrc: ["'self'", "https://accounts.google.com"],
       },
     },
+    // Allow Google OAuth popup to postMessage back to the opener window
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
     hsts: {
       maxAge: 31536000,
       includeSubDomains: true,
