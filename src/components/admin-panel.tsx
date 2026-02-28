@@ -133,8 +133,8 @@ export function AdminPanel({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="bg-gray-800 border-gray-700 w-full max-w-4xl max-h-[80vh] overflow-hidden">
-        <div className="p-6 border-b border-gray-700">
+      <Card className="bg-gray-800 border-gray-700 w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-gray-700 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Shield className="w-6 h-6 text-purple-400" />
@@ -146,7 +146,7 @@ export function AdminPanel({
           </div>
         </div>
 
-        <div className="p-6 overflow-y-auto">
+        <div className="p-6 overflow-y-auto flex-1 min-h-0">
           {error && (
             <div className="mb-4 p-3 bg-red-600/20 border border-red-600/50 rounded-lg text-red-400">
               {error}

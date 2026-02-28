@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PlansModal } from "@/components/plans-modal";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
+import authApi from "@/lib/authApi";
 
 export type SortOption = "location" | "reviews" | "az" | "price";
 
@@ -73,13 +74,38 @@ export function BusinessFinder() {
     const params = new URLSearchParams(location.search);
     const premiumParam = params.get("premium");
     if (premiumParam === "success") {
-      // Refresh user so isPremium / planType reflect the new state
-      auth.refreshUser().then(() => {
-        setPremiumNotification("success");
-        setTimeout(() => setPremiumNotification(null), 6000);
-      });
-      // Clean URL without re-rendering the whole page
+      // Clean URL immediately so a refresh doesn't re-trigger this
       navigate("/", { replace: true });
+
+      // Stripe redirects BEFORE the webhook fires, so poll the backend until
+      // the DB reflects premium status (webhook latency is usually < 5 s).
+      let attempts = 0;
+      const MAX_ATTEMPTS = 8;
+      const INTERVAL_MS = 1500;
+
+      const poll = async () => {
+        attempts++;
+        try {
+          const { user: fresh } = await authApi.getCurrentUser();
+          if (fresh?.isPremium) {
+            auth.refreshUser(); // sync React state
+            setPremiumNotification("success");
+            setTimeout(() => setPremiumNotification(null), 6000);
+            return;
+          }
+        } catch { /* ignore */ }
+
+        if (attempts < MAX_ATTEMPTS) {
+          setTimeout(poll, INTERVAL_MS);
+        } else {
+          // Webhook is very delayed — refresh state anyway and show banner
+          auth.refreshUser();
+          setPremiumNotification("success");
+          setTimeout(() => setPremiumNotification(null), 6000);
+        }
+      };
+
+      poll();
     } else if (premiumParam === "cancelled") {
       setPremiumNotification("cancelled");
       setTimeout(() => setPremiumNotification(null), 4000);

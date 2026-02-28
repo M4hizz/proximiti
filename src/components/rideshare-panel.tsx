@@ -438,12 +438,12 @@ function RoutePreviewMap({
   if (!origin && !dest) return null;
 
   return (
-    <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 relative">
+    <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 relative isolate">
       <MapContainer
         center={center}
         zoom={13}
         className="w-full"
-        style={{ height: 200 }}
+        style={{ height: 180 }}
         zoomControl={false}
         attributionControl={false}
       >
@@ -680,8 +680,8 @@ export function RidesharePanel({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg max-h-[90vh] mx-4 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm">
+      <div className="relative w-full sm:max-w-lg h-full sm:h-auto sm:max-h-[90vh] bg-white dark:bg-gray-900 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
@@ -724,7 +724,7 @@ export function RidesharePanel({
         )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4">
           {view === "list" && (
             <RideList
               rideshares={rideshares}
