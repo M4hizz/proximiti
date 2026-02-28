@@ -131,6 +131,16 @@ router.post(
       }
 
       // Generate JWT tokens (Google OAuth)
+      // If TOTP is enabled, issue a challenge token instead
+      if (user!.totpEnabled) {
+        const challengeToken = jwt.sign(
+          { userId: user!.id, challenge: true },
+          process.env.JWT_SECRET!,
+          { expiresIn: "5m", issuer: "proximiti-app", audience: "proximiti-users" },
+        );
+        return res.status(200).json({ totpRequired: true, challengeToken });
+      }
+
       const { accessToken, refreshToken } = await AuthService.generateTokens(
         user!,
       );
@@ -146,14 +156,15 @@ router.post(
       res.status(200).json({
         message: "Authentication successful",
         user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          isVerified: user.isVerified,
-          isPremium: user.isPremium,
-          planType: user.planType,
-          planExpiresAt: user.planExpiresAt,
+          id: user!.id,
+          email: user!.email,
+          name: user!.name,
+          role: user!.role,
+          isVerified: user!.isVerified,
+          isPremium: user!.isPremium,
+          planType: user!.planType,
+          planExpiresAt: user!.planExpiresAt,
+          totpEnabled: user!.totpEnabled,
         },
         // Also send tokens for clients that prefer headers over cookies
         tokens: {
@@ -240,6 +251,7 @@ router.post(
           isPremium: user.isPremium,
           planType: user.planType,
           planExpiresAt: user.planExpiresAt,
+          totpEnabled: user.totpEnabled,
         },
         tokens: {
           accessToken,

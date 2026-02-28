@@ -127,6 +127,10 @@ export function LoginForm() {
 
     try {
       const result = await authApi.loginWithGoogle(response.credential);
+      if ("totpRequired" in result && result.totpRequired) {
+        setTotpChallengeToken(result.challengeToken);
+        return;
+      }
       auth.login(result.user);
       navigate("/");
     } catch (error: any) {

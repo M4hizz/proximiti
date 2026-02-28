@@ -81,8 +81,8 @@ class AuthApiService {
   }
 
   // Google OAuth login
-  async loginWithGoogle(credential: string): Promise<AuthResponse> {
-    return this.request<AuthResponse>("/auth/google", {
+  async loginWithGoogle(credential: string): Promise<LoginResponse> {
+    return this.request<LoginResponse>("/auth/google", {
       method: "POST",
       body: JSON.stringify({
         credential,

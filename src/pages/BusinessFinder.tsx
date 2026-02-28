@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlansModal } from "@/components/plans-modal";
+import { AccountSettingsModal } from "@/components/account-settings-modal";
 
 export type SortOption = "location" | "reviews" | "az" | "price";
 
@@ -62,6 +63,7 @@ export function BusinessFinder() {
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [showPlansModal, setShowPlansModal] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [premiumNotification, setPremiumNotification] = useState<
     "success" | "cancelled" | null
   >(null);
@@ -472,7 +474,11 @@ export function BusinessFinder() {
             <div className="flex items-center gap-3">
               {auth.user ? (
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-800 rounded-full">
+                  <button
+                    onClick={() => setShowAccountSettings(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-800 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+                    title="Account Settings"
+                  >
                     <User className="w-4 h-4 text-green-600 dark:text-green-400" />
                     <span className="text-gray-900 dark:text-white text-sm font-medium">
                       {auth.user.name}
@@ -482,7 +488,7 @@ export function BusinessFinder() {
                         Admin
                       </span>
                     )}
-                  </div>
+                  </button>
 
                   {/* Admin Panel Button */}
                   {auth.user.role === "admin" && (
@@ -752,6 +758,12 @@ export function BusinessFinder() {
       <PlansModal
         isOpen={showPlansModal}
         onClose={() => setShowPlansModal(false)}
+      />
+
+      {/* Account Settings Modal */}
+      <AccountSettingsModal
+        isOpen={showAccountSettings}
+        onClose={() => setShowAccountSettings(false)}
       />
 
       {/* Admin Panel Modal */}
