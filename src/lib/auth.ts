@@ -103,6 +103,14 @@ class AuthService {
         verifyOptions,
       ) as JWTPayload;
 
+      // Explicitly reject TOTP challenge tokens.
+      // Challenge tokens carry { challenge: true } and have no jti — they are
+      // single-use, 5-minute tokens only meant to complete the 2FA flow.
+      // A real session token always has a jti that exists in the sessions table.
+      if ((payload as any).challenge === true || !payload.jti) {
+        return null;
+      }
+
       // Check if session is still valid in database
       if (!(await db.isSessionValid(payload.jti))) {
         return null;

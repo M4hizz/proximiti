@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import authApi from "@/lib/authApi";
+import { useAuth } from "@/App";
 
 interface TwoFactorSetupProps {
   totpEnabled: boolean;
@@ -14,6 +15,7 @@ export function TwoFactorSetup({
   totpEnabled,
   onStatusChange,
 }: TwoFactorSetupProps) {
+  const auth = useAuth();
   const [phase, setPhase] = useState<"idle" | "setup" | "disabling">("idle");
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [secret, setSecret] = useState("");
@@ -49,12 +51,18 @@ export function TwoFactorSetup({
     setError("");
     try {
       await authApi.totpEnable(code);
-      setSuccess("Two-factor authentication is now enabled!");
+      // Server revoked all sessions — clear the local token too
+      authApi.setStoredToken(null);
+      setSuccess(
+        "Two-factor authentication enabled! You'll be signed out now — please log back in with your authenticator code.",
+      );
       setPhase("idle");
       setCode("");
       setQrCodeDataUrl("");
       setSecret("");
       onStatusChange?.(true);
+      // Give the user a moment to read the message, then force re-login
+      setTimeout(() => auth.logout(), 2500);
     } catch (err: any) {
       setError(err.message || "Invalid code – try again");
     } finally {

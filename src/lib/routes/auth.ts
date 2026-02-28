@@ -567,9 +567,26 @@ router.post(
 
       await db.updateUser(req.user.id, { totpEnabled: true });
 
-      res
-        .status(200)
-        .json({ message: "Two-factor authentication enabled successfully." });
+      // Revoke ALL sessions so the user must log back in through the 2FA flow.
+      // Any token issued before 2FA was enabled must not grant access to
+      // authenticated features without re-verifying with the authenticator app.
+      await AuthService.revokeAllUserTokens(req.user.id);
+
+      // Clear session cookies on this device too
+      const expireCookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict" as const,
+        maxAge: 0,
+        path: "/",
+      };
+      res.clearCookie("accessToken", expireCookieOptions);
+      res.clearCookie("refreshToken", expireCookieOptions);
+
+      res.status(200).json({
+        message: "Two-factor authentication enabled successfully.",
+        requiresRelogin: true,
+      });
     } catch (error) {
       console.error("TOTP enable error:", error);
       res.status(500).json({ error: "Failed to enable TOTP" });
