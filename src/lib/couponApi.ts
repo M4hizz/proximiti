@@ -80,6 +80,23 @@ export async function getBusinessCouponCount(
 }
 
 /**
+ * Fetch coupon counts for multiple businesses in a single request.
+ * Returns a map of businessId → count (missing ids have 0 coupons).
+ */
+export async function getBatchCouponCounts(
+  businessIds: string[],
+): Promise<Record<string, number>> {
+  if (businessIds.length === 0) return {};
+  const ids = businessIds.slice(0, 50).join(",");
+  const response = await fetch(
+    `${API_URL}/businesses/coupons/batch-counts?ids=${encodeURIComponent(ids)}`,
+  );
+  if (!response.ok) return {};
+  const data = await response.json();
+  return data.counts ?? {};
+}
+
+/**
  * Redeem a coupon
  */
 export async function redeemCoupon(couponCode: string): Promise<{

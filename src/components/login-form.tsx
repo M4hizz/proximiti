@@ -109,7 +109,7 @@ export function LoginForm() {
           theme: "outline",
           size: "large",
           text: "signin_with",
-          width: "100%",
+          width: "368",
         });
       } catch (e) {
         console.error("Google button render error:", e);

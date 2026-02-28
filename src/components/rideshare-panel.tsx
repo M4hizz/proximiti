@@ -587,7 +587,7 @@ export function RidesharePanel({
   const fetchRideshares = useCallback(async () => {
     try {
       const { rideshares: data } = await rideshareApi.getActiveRideshares();
-      setRideshares(data);
+      setRideshares(Array.isArray(data) ? data : []);
     } catch {
       // Silently fail on poll – don't overwrite existing data
     }
@@ -875,7 +875,7 @@ function RideList({
         {joinError && <p className="text-xs text-red-500 mt-1">{joinError}</p>}
       </div>
 
-      {rideshares.length === 0 ? (
+      {(!Array.isArray(rideshares) || rideshares.length === 0) ? (
         <div className="text-center py-10 text-gray-400 dark:text-gray-500">
           <Car className="w-12 h-12 mx-auto mb-3 opacity-40" />
           <p className="font-medium">No active rides</p>

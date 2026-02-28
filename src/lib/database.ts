@@ -1032,6 +1032,27 @@ class DatabaseManager {
     return toNum((result.rows[0] as any).count);
   }
 
+  /** Fetch active coupon counts for multiple businesses in a single query. */
+  async getActiveCouponCounts(
+    businessIds: string[],
+  ): Promise<Record<string, number>> {
+    if (businessIds.length === 0) return {};
+    const placeholders = businessIds.map(() => "?").join(", ");
+    const result = await this.client.execute({
+      sql: `SELECT business_id, COUNT(*) as count FROM coupons
+            WHERE business_id IN (${placeholders}) AND is_active = 1
+              AND datetime(start_date) <= datetime('now')
+              AND datetime(end_date) >= datetime('now')
+            GROUP BY business_id`,
+      args: businessIds,
+    });
+    const counts: Record<string, number> = {};
+    for (const row of result.rows as unknown as Record<string, unknown>[]) {
+      counts[row.business_id as string] = toNum(row.count);
+    }
+    return counts;
+  }
+
   async expireOldCoupons(): Promise<number> {
     const result = await this.client.execute(
       "UPDATE coupons SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE is_active = 1 AND datetime(end_date) < datetime('now')",

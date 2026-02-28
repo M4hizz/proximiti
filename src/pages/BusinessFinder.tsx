@@ -12,6 +12,7 @@ import { RidesharePanel } from "@/components/rideshare-panel";
 import { businesses, calculateDistance } from "@/lib/businesses";
 import { fetchNearbyBusinesses, searchBusinesses } from "@/lib/api";
 import { getBookmarkedIds } from "@/lib/bookmarks";
+import { getBatchCouponCounts } from "@/lib/couponApi";
 import type { Business } from "@/lib/businesses";
 import {
   User,
@@ -96,6 +97,7 @@ export function BusinessFinder() {
   const [searchResults, setSearchResults] = useState<Business[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
+  const [couponCounts, setCouponCounts] = useState<Record<string, number>>({});
 
   // Live search via Google Places whenever the query changes.
   // Uses the known user location if available; otherwise silently gets it first.
@@ -381,6 +383,15 @@ export function BusinessFinder() {
   };
 
   // Convert an AI result into a Business shape so it can be shown in the detail view
+  // Fetch coupon counts for the visible list in one batch request
+  useEffect(() => {
+    if (filteredBusinesses.length === 0) return;
+    const ids = filteredBusinesses.map((b) => b.id);
+    getBatchCouponCounts(ids)
+      .then(setCouponCounts)
+      .catch(() => {}); // silent – badges just won't show on error
+  }, [filteredBusinesses]);
+
   const handleAIResult = (result: AIResult) => {
     const asBusiness: Business = {
       id: `ai-${result.id}`,
@@ -705,6 +716,7 @@ export function BusinessFinder() {
                       business={business}
                       isSelected={selectedBusiness?.id === business.id}
                       onClick={() => handleSelectBusiness(business)}
+                      couponCount={couponCounts[business.id] ?? 0}
                     />
                   </div>
                 ))
