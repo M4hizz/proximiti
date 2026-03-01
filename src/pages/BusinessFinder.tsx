@@ -329,7 +329,7 @@ export function BusinessFinder() {
               2000, // 2km radius
             );
             if (fetched.length > 0) {
-              setNearbyBusinesses(fetched.slice(0, 25));
+              setNearbyBusinesses(fetched.slice(0, 50));
             } else {
               // No OSM results – fall back to static list sorted by distance
               const { getNearestBusinesses } = await import("@/lib/businesses");
@@ -337,7 +337,7 @@ export function BusinessFinder() {
                 getNearestBusinesses(
                   position.coords.latitude,
                   position.coords.longitude,
-                  25,
+                  50,
                 ),
               );
             }
@@ -349,7 +349,7 @@ export function BusinessFinder() {
               getNearestBusinesses(
                 position.coords.latitude,
                 position.coords.longitude,
-                25,
+                50,
               ),
             );
           } finally {
@@ -385,15 +385,15 @@ export function BusinessFinder() {
     try {
       const fetched = await fetchNearbyBusinesses(lat, lng, 2000); // 2km radius
       if (fetched.length > 0) {
-        setNearbyBusinesses(fetched.slice(0, 25));
+        setNearbyBusinesses(fetched.slice(0, 50));
       } else {
         const { getNearestBusinesses } = await import("@/lib/businesses");
-        setNearbyBusinesses(getNearestBusinesses(lat, lng, 25));
+        setNearbyBusinesses(getNearestBusinesses(lat, lng, 50));
       }
     } catch (error) {
       console.error("Error fetching nearby businesses:", error);
       const { getNearestBusinesses } = await import("@/lib/businesses");
-      setNearbyBusinesses(getNearestBusinesses(lat, lng, 25));
+      setNearbyBusinesses(getNearestBusinesses(lat, lng, 50));
     } finally {
       setIsLoadingBusinesses(false);
     }
@@ -474,15 +474,15 @@ export function BusinessFinder() {
       <header className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 overflow-visible">
         <div className="max-w-7xl mx-auto px-4 py-4 overflow-visible">
           {/* Top bar with logo and user */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 gap-2">
             {/* Logo and title */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <img
                 src="/ProximitiImage.png"
                 alt="Proximiti"
-                className="w-10 h-10"
+                className="w-8 h-8 sm:w-10 sm:h-10"
               />
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
                 Proximiti
               </h1>
               <span className="text-gray-500 dark:text-gray-400 text-sm hidden sm:inline">
@@ -491,16 +491,16 @@ export function BusinessFinder() {
             </div>
 
             {/* User section */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 sm:gap-3 shrink-0">
               {auth.user ? (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 sm:gap-3">
                   <button
                     onClick={() => setShowAccountSettings(true)}
                     className="flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-800 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
                     title="Account Settings"
                   >
                     <User className="w-4 h-4 text-green-600 dark:text-green-400" />
-                    <span className="text-gray-900 dark:text-white text-sm font-medium">
+                    <span className="text-gray-900 dark:text-white text-sm font-medium hidden sm:inline max-w-25 truncate">
                       {auth.user.name}
                     </span>
                     {auth.user.role === "admin" && (
@@ -606,10 +606,10 @@ export function BusinessFinder() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 py-6 lg:h-[calc(100vh-65px)] lg:overflow-hidden lg:py-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Map section */}
-          <div className="h-100 lg:h-[calc(100vh-200px)] lg:sticky lg:top-50">
+      <main className="max-w-7xl mx-auto px-4 py-4 lg:h-[calc(100vh-65px)] lg:overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+          {/* Map section — shorter on mobile, contained z-index */}
+          <div className="h-56 sm:h-72 lg:h-[calc(100vh-200px)] lg:sticky lg:top-50 isolate rounded-xl overflow-hidden">
             <MapView
               businesses={filteredBusinesses}
               selectedBusiness={selectedBusiness}
@@ -621,7 +621,7 @@ export function BusinessFinder() {
           </div>
 
           {/* List section */}
-          <div className="relative lg:h-[calc(100vh-200px)] lg:overflow-hidden flex flex-col gap-4">
+          <div className="relative min-h-75 lg:h-[calc(100vh-200px)] lg:overflow-hidden flex flex-col gap-4">
             {/* Results count and sort */}
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -728,7 +728,7 @@ export function BusinessFinder() {
 
             {/* Business list */}
             <div
-              className={`space-y-3 overflow-y-auto flex-1 ${selectedBusiness ? "scrollbar-hide" : ""}`}
+              className={`space-y-3 overflow-y-auto flex-1 min-h-0 ${selectedBusiness ? "scrollbar-hide" : ""}`}
             >
               {isLoadingBusinesses || isSearching ? (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">
@@ -756,9 +756,9 @@ export function BusinessFinder() {
               )}
             </div>
 
-            {/* Business detail — overlays the list column */}
+            {/* Business detail — full-screen on mobile, overlays list on desktop */}
             {selectedBusiness && (
-              <div className="absolute inset-0 z-20 overflow-y-auto rounded-xl shadow-2xl">
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-white dark:bg-gray-800 lg:absolute lg:inset-0 lg:z-20 lg:rounded-xl lg:shadow-2xl">
                 <BusinessDetail
                   key={selectedBusiness.id}
                   business={selectedBusiness}

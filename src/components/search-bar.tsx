@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, MapPin, Navigation, Store, Globe, Map } from "lucide-react";
+import { Search, MapPin, Navigation, Store, Globe, Map, X } from "lucide-react";
 import {
   LocationSearchEngine,
   formatDistance,
@@ -85,6 +85,15 @@ export function SearchBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Escape key closes dropdown
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowDropdown(false);
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, []);
+
   useEffect(() => {
     if (locationQuery.length < 2) {
       setResults([]);
@@ -132,7 +141,7 @@ export function SearchBar({
   }
 
   return (
-    <div className="flex gap-3 relative z-10">
+    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 relative z-10">
       {/* Search input */}
       <div className="flex-1 relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -141,8 +150,17 @@ export function SearchBar({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Search businesses, categories..."
-          className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl pl-12 pr-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+          className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl pl-12 pr-10 py-3 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
         />
+        {value && (
+          <button
+            onClick={() => onChange("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            aria-label="Clear search"
+          >
+            <X className="w-4 h-4 text-gray-400" />
+          </button>
+        )}
       </div>
 
       {/* Location input with smart autocomplete */}
@@ -160,11 +178,24 @@ export function SearchBar({
           }}
           onBlur={() => setIsLocationFocused(false)}
           placeholder="Enter location..."
-          className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl pl-12 pr-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+          className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl pl-12 pr-10 py-3 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
         />
+        {locationQuery && (
+          <button
+            onClick={() => {
+              setLocationQuery("");
+              setResults([]);
+              setShowDropdown(false);
+            }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors z-10"
+            aria-label="Clear location"
+          >
+            <X className="w-4 h-4 text-gray-400" />
+          </button>
+        )}
 
         {/* Dropdown with grouped results */}
-        {(showDropdown || isLoading) && locationQuery.length >= 2 && (
+        {showDropdown && locationQuery.length >= 2 && (
           <div
             className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border-2 border-green-500 rounded-xl shadow-2xl max-h-96 overflow-y-auto z-9999"
             style={{ minWidth: "300px" }}
