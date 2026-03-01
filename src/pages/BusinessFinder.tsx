@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PlansModal } from "@/components/plans-modal";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
+import { verifyCheckoutSession } from "@/lib/paymentApi";
 import authApi from "@/lib/authApi";
 
 export type SortOption = "location" | "reviews" | "az" | "price";
@@ -73,40 +74,70 @@ export function BusinessFinder() {
     const params = new URLSearchParams(location.search);
     const premiumParam = params.get("premium");
     if (premiumParam === "success") {
+      const sessionId = params.get("session_id");
       // Clean URL immediately so a refresh doesn't re-trigger this
       navigate("/", { replace: true });
 
-      // Stripe redirects BEFORE the webhook fires, so poll the backend until
-      // the DB reflects premium status (webhook latency is usually < 5 s).
-      let attempts = 0;
-      const MAX_ATTEMPTS = 8;
-      const INTERVAL_MS = 1500;
+      if (sessionId) {
+        // Directly verify + activate via Stripe — no webhook dependency
+        const activate = async () => {
+          let attempts = 0;
+          const MAX = 6;
+          const DELAY = 2000;
 
-      const poll = async () => {
-        attempts++;
-        try {
-          const { user: fresh } = await authApi.getCurrentUser();
-          if (fresh?.isPremium) {
-            auth.refreshUser(); // sync React state
-            setPremiumNotification("success");
-            setTimeout(() => setPremiumNotification(null), 6000);
-            return;
+          while (attempts < MAX) {
+            attempts++;
+            try {
+              const user = await verifyCheckoutSession(sessionId);
+              if (user?.isPremium) {
+                auth.refreshUser();
+                setPremiumNotification("success");
+                setTimeout(() => setPremiumNotification(null), 6000);
+                return;
+              }
+            } catch {
+              /* Stripe session may not be finalized yet — retry */
+            }
+            if (attempts < MAX) {
+              await new Promise((r) => setTimeout(r, DELAY));
+            }
           }
-        } catch {
-          /* ignore */
-        }
-
-        if (attempts < MAX_ATTEMPTS) {
-          setTimeout(poll, INTERVAL_MS);
-        } else {
-          // Webhook is very delayed — refresh state anyway and show banner
+          // Fallback: refresh state anyway — the webhook may have landed
           auth.refreshUser();
           setPremiumNotification("success");
           setTimeout(() => setPremiumNotification(null), 6000);
-        }
-      };
+        };
+        activate();
+      } else {
+        // Legacy fallback: no session_id in URL — poll /auth/me
+        let attempts = 0;
+        const MAX_ATTEMPTS = 8;
+        const INTERVAL_MS = 1500;
 
-      poll();
+        const poll = async () => {
+          attempts++;
+          try {
+            const { user: fresh } = await authApi.getCurrentUser();
+            if (fresh?.isPremium) {
+              auth.refreshUser();
+              setPremiumNotification("success");
+              setTimeout(() => setPremiumNotification(null), 6000);
+              return;
+            }
+          } catch {
+            /* ignore */
+          }
+
+          if (attempts < MAX_ATTEMPTS) {
+            setTimeout(poll, INTERVAL_MS);
+          } else {
+            auth.refreshUser();
+            setPremiumNotification("success");
+            setTimeout(() => setPremiumNotification(null), 6000);
+          }
+        };
+        poll();
+      }
     } else if (premiumParam === "cancelled") {
       setPremiumNotification("cancelled");
       setTimeout(() => setPremiumNotification(null), 4000);

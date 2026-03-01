@@ -409,7 +409,6 @@ app.delete(
   },
 );
 
-
 // Threshold: once Proximiti review count >= this, Google reviews are phased out
 const PROXIMITI_PHASE_OUT_THRESHOLD = 10;
 
@@ -1459,7 +1458,6 @@ app.get(
   },
 );
 
-
 const aiSearchRateLimit = createRateLimiter(60 * 1000, 30); // 30 requests/minute
 
 app.post(
@@ -1975,7 +1973,6 @@ RULES:
   },
 );
 
-
 app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error:", error);
 
@@ -1994,7 +1991,6 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
         : "Something went wrong",
   });
 });
-
 
 app.get("/api/businesses/:id/coupons", async (req: Request, res: Response) => {
   try {
@@ -2066,7 +2062,6 @@ app.post("/api/coupons/redeem", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to redeem coupon" });
   }
 });
-
 
 app.get(
   "/api/admin/coupons",
@@ -2319,7 +2314,6 @@ app.delete(
     }
   },
 );
-
 
 // Get all active rideshares (public listing; mine=true requires auth)
 app.get(
@@ -2586,7 +2580,6 @@ app.post(
   },
 );
 
-
 /**
  * POST /api/payments/create-checkout-session
  * Creates a Stripe Checkout session for the Premium subscription.
@@ -2640,7 +2633,7 @@ app.post(
           metadata: { userId, planId },
         },
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${frontendUrl}/?premium=success&plan=${planId}`,
+        success_url: `${frontendUrl}/?premium=success&plan=${planId}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${frontendUrl}/?premium=cancelled`,
       });
 
@@ -2648,6 +2641,97 @@ app.post(
     } catch (error: any) {
       console.error("Stripe checkout error:", error);
       res.status(500).json({ error: "Failed to create checkout session" });
+    }
+  },
+);
+
+/**
+ * POST /api/payments/verify-session
+ * Verify a completed Stripe checkout session and activate premium.
+ * Called by the frontend after redirect — doesn't depend on webhooks.
+ */
+app.post(
+  "/api/payments/verify-session",
+  authenticate,
+  async (req: Request, res: Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const userId = String(authReq.user!.id);
+    const { sessionId } = req.body as { sessionId?: string };
+
+    if (!sessionId) {
+      return res.status(400).json({ error: "sessionId is required" });
+    }
+    if (!stripe) {
+      return res.status(503).json({ error: "Stripe not configured" });
+    }
+
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      // Verify session belongs to this user and is paid
+      if (session.metadata?.userId !== userId) {
+        return res
+          .status(403)
+          .json({ error: "Session does not belong to this user" });
+      }
+      if (session.payment_status !== "paid") {
+        return res
+          .status(402)
+          .json({
+            error: "Payment not completed",
+            paymentStatus: session.payment_status,
+          });
+      }
+
+      const planId = (session.metadata?.planId || "essential") as
+        | "essential"
+        | "enterprise";
+
+      // Get subscription period end if available
+      let planExpiresAt: string | null = null;
+      if (session.subscription) {
+        try {
+          const sub = await stripe.subscriptions.retrieve(
+            session.subscription as string,
+          );
+          planExpiresAt = new Date(
+            (sub as any).current_period_end * 1000,
+          ).toISOString();
+        } catch {
+          /* best-effort */
+        }
+      }
+
+      await db.setPremiumStatus(userId, true, planId, planExpiresAt);
+      if (session.subscription) {
+        await db.setStripeSubscriptionId(
+          userId,
+          session.subscription as string,
+        );
+      }
+
+      const user = await db.getUserById(parseInt(userId));
+      console.log(
+        `⭐ User ${userId} verified as ${planId} via session ${sessionId}`,
+      );
+
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          isVerified: user.isVerified,
+          isPremium: user.isPremium,
+          planType: user.planType,
+          planExpiresAt: user.planExpiresAt,
+          totpEnabled: user.totpEnabled,
+          createdAt: user.createdAt,
+        },
+      });
+    } catch (error: any) {
+      console.error("Verify session error:", error);
+      res.status(500).json({ error: "Failed to verify session" });
     }
   },
 );

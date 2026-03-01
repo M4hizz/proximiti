@@ -30,6 +30,30 @@ export async function startStripeCheckout(
   }
 }
 
+export async function verifyCheckoutSession(sessionId: string): Promise<{
+  id: string;
+  email: string;
+  name: string;
+  role: "user" | "admin";
+  isVerified: boolean;
+  isPremium: boolean;
+  planType: string;
+  planExpiresAt: string | null;
+}> {
+  const response = await fetch(`${API_URL}/payments/verify-session`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ sessionId }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to verify session");
+  }
+  return data.user;
+}
+
 export async function demoUpgrade(
   planType: "essential" | "enterprise" = "essential",
 ): Promise<{
